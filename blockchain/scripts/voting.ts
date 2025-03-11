@@ -35,14 +35,17 @@ async function main() {
   console.log("TokenVoting deployed to:", tokenVotingAddress);
 
   // Get signers
-  const [, voter1, voter2, candidate1, candidate2] = await ethers.getSigners();
+  const [owner, candidate1, candidate2, ...voterSigners] =
+    await ethers.getSigners();
+  const voters = voterSigners.slice(0, 10);
 
   console.log("\nSetting up election...");
 
   // Transfer tokens to voters
   console.log("Transferring tokens to voters...");
-  await votingToken.transfer(voter1.address, ethers.parseEther("100"));
-  await votingToken.transfer(voter2.address, ethers.parseEther("100"));
+  for (const voter of voters) {
+    await votingToken.transfer(voter.address, ethers.parseEther("100"));
+  }
   console.log("Transferred tokens to voters");
 
   // Get current block
@@ -96,12 +99,11 @@ async function main() {
 
   // Approve token spending
   console.log("\nApproving token spending...");
-  await votingToken
-    .connect(voter1)
-    .approve(tokenVotingAddress, ethers.parseEther("100"));
-  await votingToken
-    .connect(voter2)
-    .approve(tokenVotingAddress, ethers.parseEther("100"));
+  for (const voter of voters) {
+    await votingToken
+      .connect(voter)
+      .approve(tokenVotingAddress, ethers.parseEther("100"));
+  }
   console.log("Approved token spending");
 
   // Move time to just before election start and nominate candidates
@@ -117,14 +119,26 @@ async function main() {
 
   // Register voters
   console.log("\nRegistering voters...");
-  await tokenVoting.connect(voter1).registerVoter(electionId);
-  await tokenVoting.connect(voter2).registerVoter(electionId);
+  for (const voter of voters) {
+    await tokenVoting.connect(voter).registerVoter(electionId);
+  }
   console.log("Voters registered");
 
   // Cast votes
   console.log("\nCasting votes...");
-  await tokenVoting.connect(voter1).vote(electionId, 1);
-  await tokenVoting.connect(voter2).vote(electionId, 2);
+
+  // First 7 voters vote for candidate 1
+  for (let i = 0; i < 7; i++) {
+    await tokenVoting.connect(voters[i]).vote(electionId, 1);
+    console.log(`Voter ${i + 1} voted for Candidate 1`);
+  }
+
+  // Last 3 voters vote for candidate 2
+  for (let i = 7; i < 10; i++) {
+    await tokenVoting.connect(voters[i]).vote(electionId, 2);
+    console.log(`Voter ${i + 1} voted for Candidate 2`);
+  }
+
   console.log("Votes cast");
 
   // Move time to after election end
