@@ -138,10 +138,16 @@ contract TokenVoting {
         emit Voted(msg.sender, electionId, candidateId, voteWeight);
     }
 
+    function deactivateElection(uint256 electionId) public {
+        require(block.timestamp > elections[electionId].endTime, "Election is still active.");
+        require(elections[electionId].isActive, "Election is already inactive.");
+        elections[electionId].isActive = false;
+    }
+
     function getResults(
         uint256 electionId
     ) public view returns (uint256[] memory) {
-        require(!elections[electionId].isActive, "Election is still active.");
+        require(block.timestamp > elections[electionId].endTime, "Election is still active.");
 
         uint256 candidateCount = 0;
         for (uint256 i = 0; i < 100; i++) {

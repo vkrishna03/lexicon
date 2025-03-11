@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
@@ -26,7 +26,7 @@ contract ElectionManager is AccessControl, Pausable, ReentrancyGuard {
 
     struct BatchVote {
         uint256[] proposalIds;
-        bool[] supports;
+        bool[] voteSupport;
         uint256[] amounts;
         bytes32 batchRoot; // Merkle root of votes for L2 verification
     }
@@ -80,10 +80,16 @@ contract ElectionManager is AccessControl, Pausable, ReentrancyGuard {
     function createProposal(
         string memory description,
         uint256 startTime
-    ) public returns (uint256) {
+    ) public whenNotPaused returns (uint256) {
         require(
             token.balanceOf(msg.sender) >= minimumQuorum,
             "Insufficient tokens to create proposal"
+        );
+
+        // In createProposal function:
+        require(
+            startTime > block.timestamp,
+            "Start time must be in the future"
         );
 
         proposalCount++;
@@ -107,17 +113,32 @@ contract ElectionManager is AccessControl, Pausable, ReentrancyGuard {
 
     function submitBatchVote(
         BatchVote memory batchVote
-    ) external onlyRole(ROLLUP_OPERATOR_ROLE) nonReentrant {
+    ) external whenNotPaused onlyRole(ROLLUP_OPERATOR_ROLE) nonReentrant {
         require(
             !processedBatches[batchVote.batchRoot],
             "Batch already processed"
+        );
+
+        // In submitBatchVote function:
+        require(batchVote.proposalIds.length > 0, "Empty batch");
+        require(
+            batchVote.proposalIds.length == batchVote.voteSupport.length &&
+                batchVote.proposalIds.length == batchVote.amounts.length,
+            "Array length mismatch"
         );
 
         // Process the batch of votes from L2
         for (uint i = 0; i < batchVote.proposalIds.length; i++) {
             Proposal storage proposal = proposals[batchVote.proposalIds[i]];
 
-            if (batchVote.supports[i]) {
+            require(proposal.id != 0, "Proposal doesn't exist");
+            require(
+                block.timestamp >= proposal.startTime &&
+                    block.timestamp <= proposal.endTime,
+                "Proposal not active"
+            );
+
+            if (batchVote.voteSupport[i]) {
                 proposal.forVotes += batchVote.amounts[i];
             } else {
                 proposal.againstVotes += batchVote.amounts[i];
