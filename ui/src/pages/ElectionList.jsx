@@ -1,27 +1,61 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { getElections } from '../services/electionService';
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { useWeb3 } from "../contexts/Web3Context";
+import { getElections } from "../services/blockchainService";
 
 function ElectionList() {
+  const { contracts, account } = useWeb3();
   const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function fetchElections() {
+      if (!contracts || !contracts.tokenVoting) {
+        setError("Please connect your wallet to view elections");
+        setLoading(false);
+        return;
+      }
+
       try {
-        const electionData = await getElections();
+        const electionData = await getElections(contracts.tokenVoting);
         setElections(electionData);
       } catch (err) {
-        setError('Failed to load elections: ' + err.message);
+        setError("Failed to load elections: " + err.message);
         console.error(err);
       } finally {
         setLoading(false);
       }
     }
 
-    fetchElections();
-  }, []);
+    if (contracts?.tokenVoting) {
+      const filter = contracts.tokenVoting.filters.ElectionCreated();
+      const listener = () => {
+        // Refresh elections when a new one is created
+        fetchElections();
+      };
+
+      contracts.tokenVoting.on(filter, listener);
+
+      return () => {
+        contracts.tokenVoting.off(filter, listener);
+      };
+    }
+  }, [contracts]);
+
+  if (!account) {
+    return (
+      <div className="text-center py-10">
+        <p>Please connect your wallet to view elections</p>
+        <Link
+          to="/"
+          className="text-blue-500 hover:underline mt-4 inline-block"
+        >
+          Connect Wallet
+        </Link>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -36,8 +70,8 @@ function ElectionList() {
     <div className="max-w-4xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Available Elections</h1>
-        <Link 
-          to="/create-election" 
+        <Link
+          to="/create-election"
           className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded"
         >
           Create New Election
@@ -57,37 +91,44 @@ function ElectionList() {
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2">
-          {elections.map(election => (
+          {elections.map((election) => (
             <div key={election.id} className="bg-white rounded-lg shadow p-6">
               <h2 className="text-xl font-semibold mb-2">{election.title}</h2>
               <p className="text-gray-600 mb-2">{election.description}</p>
-              
+
               <div className="mt-4">
-                <p><span className="font-medium">Status:</span> {election.status}</p>
-                <p><span className="font-medium">Start:</span> {new Date(election.startDate).toLocaleString()}</p>
-                <p><span className="font-medium">End:</span> {new Date(election.endDate).toLocaleString()}</p>
+                <p>
+                  <span className="font-medium">Status:</span> {election.status}
+                </p>
+                <p>
+                  <span className="font-medium">Start:</span>{" "}
+                  {new Date(election.startDate).toLocaleString()}
+                </p>
+                <p>
+                  <span className="font-medium">End:</span>{" "}
+                  {new Date(election.endDate).toLocaleString()}
+                </p>
               </div>
-              
+
               <div className="mt-6 flex flex-wrap gap-2">
-                {election.status === 'Nomination' && (
-                  <Link 
-                    to={`/nominate/${election.id}`}
-                    className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded"
-                  >
-                    Nominate
-                  </Link>
+                {election.status === "Active" && (
+                  <>
+                    <Link
+                      to={`/nominate/${election.id}`}
+                      className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded"
+                    >
+                      Nominate
+                    </Link>
+                    <Link
+                      to={`/vote/${election.id}`}
+                      className="bg-purple-500 hover:bg-purple-600 text-white text-sm font-bold py-2 px-3 rounded"
+                    >
+                      Vote
+                    </Link>
+                  </>
                 )}
-                
-                {election.status === 'Voting' && (
-                  <Link 
-                    to={`/vote/${election.id}`}
-                    className="bg-purple-500 hover:bg-purple-600 text-white text-sm font-bold py-2 px-3 rounded"
-                  >
-                    Vote
-                  </Link>
-                )}
-                
-                <Link 
+
+                <Link
                   to={`/results/${election.id}`}
                   className="bg-gray-500 hover:bg-gray-600 text-white text-sm font-bold py-2 px-3 rounded"
                 >

@@ -1,47 +1,61 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React from "react";
+import { Link, useLocation } from "react-router-dom";
+import { useWeb3 } from "../contexts/Web3Context";
+import AccountSelector from "./AccountSelector";
 
-function Navbar({ wallet }) {
+function Navbar() {
+  const { account } = useWeb3();
   const location = useLocation();
 
   return (
     <nav className="bg-gray-800 text-white shadow-md">
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center py-4">
-          <Link to="/" className="text-xl font-bold">Blockchain Voting</Link>
-          
+          <Link to="/" className="text-xl font-bold">
+            Blockchain Voting
+          </Link>
+
           <div className="flex items-center">
-            {wallet && (
+            {account && (
               <div className="mr-4 text-sm bg-gray-700 rounded-full px-3 py-1">
-                {wallet.substring(0, 6)}...{wallet.substring(wallet.length - 4)}
+                {account.substring(0, 6)}...
+                {account.substring(account.length - 4)}
+                <AccountSelector />
               </div>
             )}
-            
+
             <div className="space-x-4">
-              {wallet ? (
-                <Link 
+              {account ? (
+                <Link
                   to="/elections"
-                  className={`hover:text-blue-300 ${location.pathname === '/elections' ? 'text-blue-300 font-medium' : ''}`}
+                  className={`hover:text-blue-300 ${location.pathname === "/elections" ? "text-blue-300 font-medium" : ""}`}
                 >
                   Elections
                 </Link>
               ) : (
-                <Link 
+                <Link
                   to="/"
-                  className={`hover:text-blue-300 ${location.pathname === '/' ? 'text-blue-300 font-medium' : ''}`}
+                  className={`hover:text-blue-300 ${location.pathname === "/" ? "text-blue-300 font-medium" : ""}`}
                 >
                   Connect Wallet
                 </Link>
               )}
-              
-              {wallet && (
-                <Link 
+
+              {account && (
+                <Link
                   to="/create-election"
-                  className={`hover:text-blue-300 ${location.pathname === '/create-election' ? 'text-blue-300 font-medium' : ''}`}
+                  className={`hover:text-blue-300 ${location.pathname === "/create-election" ? "text-blue-300 font-medium" : ""}`}
                 >
                   Create Election
                 </Link>
               )}
+
+              <Link
+                to="/setup"
+                className={`hover:text-blue-300 ${location.pathname === "/setup" ? "text-blue-300 font-medium" : ""}`}
+              >
+                Setup
+              </Link>
             </div>
           </div>
         </div>
