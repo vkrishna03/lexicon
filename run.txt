@@ -1,0 +1,5 @@
+cd blockchain
+npm run start   // in one terminal
+npx hardhat run scripts/deploy.ts --network localhost   // in another terminal
+
+
