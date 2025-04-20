@@ -40,21 +40,20 @@ function Navbar() {
                   Connect Wallet
                 </Link>
               )}
-
-              {account && (
-                <Link
-                  to="/create-election"
-                  className={`hover:text-blue-300 ${location.pathname === "/create-election" ? "text-blue-300 font-medium" : ""}`}
-                >
-                  Create Election
-                </Link>
-              )}
+              
 
               <Link
                 to="/setup"
                 className={`hover:text-blue-300 ${location.pathname === "/setup" ? "text-blue-300 font-medium" : ""}`}
               >
                 Setup
+              </Link>
+
+              <Link
+                to="/contract-test"
+                className={`hover:text-blue-300 ${location.pathname === "/contract-test" ? "text-blue-300 font-medium" : ""}`}
+              >
+                Contract Test
               </Link>
             </div>
           </div>

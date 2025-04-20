@@ -13,14 +13,17 @@ const fromBlockchainTimestamp = (timestamp) => {
 // Get all elections
 export const getElections = async (tokenVotingContract) => {
   try {
+    console.log("Getting election count...");
     // Get election count
-    const electionCount = await tokenVotingContract.electionCount();
-    const count = Number(electionCount);
+    const electionCountBN = await tokenVotingContract.electionCount();
+    const electionCount = parseInt(electionCountBN.toString());
+    console.log("Election count:", electionCount);
 
     // Fetch each election
     const elections = [];
-    for (let i = 1; i <= count; i++) {
+    for (let i = 1; i <= electionCount; i++) {
       try {
+        console.log(`Fetching election ${i}...`);
         const election = await getElection(tokenVotingContract, i.toString());
         if (election) {
           elections.push(election);
@@ -33,17 +36,21 @@ export const getElections = async (tokenVotingContract) => {
     return elections;
   } catch (error) {
     console.error("Error fetching elections:", error);
-    throw new Error("Failed to fetch elections");
+    throw new Error("Failed to fetch elections: " + error.message);
   }
 };
 
 // Get a specific election by ID
 export const getElection = async (tokenVotingContract, electionId) => {
   try {
+    console.log(`Getting election ${electionId}...`);
     // Fetch election data from contract
     const electionData = await tokenVotingContract.elections(electionId);
+    console.log("Raw election data:", electionData);
 
+    // Check if the election exists (has a name)
     if (!electionData || !electionData.name) {
+      console.log(`Election ${electionId} does not exist or has no name`);
       return null;
     }
 
@@ -52,16 +59,14 @@ export const getElection = async (tokenVotingContract, electionId) => {
     const startDate = fromBlockchainTimestamp(electionData.startTime);
     const endDate = fromBlockchainTimestamp(electionData.endTime);
 
-    // Calculate nomination end date (halfway between start and end)
+    // Calculate nomination end date (halfway between start and end for simplicity)
     const nominationEndDate = new Date(
       (startDate.getTime() + endDate.getTime()) / 2,
     );
 
     let status = "Upcoming";
-    if (now >= startDate && now < nominationEndDate) {
-      status = "Nomination";
-    } else if (now >= nominationEndDate && now < endDate) {
-      status = "Voting";
+    if (now >= startDate && now < endDate) {
+      status = "Active";
     } else if (now >= endDate) {
       status = "Completed";
     }
@@ -69,91 +74,59 @@ export const getElection = async (tokenVotingContract, electionId) => {
     return {
       id: electionId.toString(),
       title: electionData.name,
-      description: "Election created on blockchain", // Your contract doesn't store description
+      description: `Election #${electionId}`,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       nominationEndDate: nominationEndDate.toISOString(),
       isActive: electionData.isActive,
-      totalVotes: electionData.totalVotes?.toString() || "0",
+      totalVotes: electionData.totalVotes
+        ? electionData.totalVotes.toString()
+        : "0",
       status,
     };
   } catch (error) {
     console.error(`Error fetching election ${electionId}:`, error);
-    throw new Error(`Failed to fetch election ${electionId}`);
+    throw new Error(`Failed to fetch election ${electionId}: ${error.message}`);
   }
 };
 
 // Create a new election
 export const createElection = async (tokenVotingContract, electionData) => {
   try {
+    console.log("Creating election with data:", electionData);
     const startTimestamp = toBlockchainTimestamp(electionData.startDate);
     const endTimestamp = toBlockchainTimestamp(electionData.endDate);
 
+    console.log("Start timestamp:", startTimestamp);
+    console.log("End timestamp:", endTimestamp);
+
     // Call contract method to create election
+    console.log("Sending transaction to create election...");
     const tx = await tokenVotingContract.createElection(
       electionData.title,
       startTimestamp,
       endTimestamp,
     );
 
+    console.log("Transaction sent, waiting for confirmation...");
     // Wait for transaction to be mined
     const receipt = await tx.wait();
-    console.log("Election created:", receipt);
+    console.log("Transaction confirmed:", receipt);
 
-    // Get the new election ID (should be electionCount)
-    const electionCount = await tokenVotingContract.electionCount();
-    const electionId = electionCount.toString();
+    // Get the new election count to determine the id
+    const electionCountBN = await tokenVotingContract.electionCount();
+    const newElectionId = electionCountBN.toString();
+    console.log("New election ID:", newElectionId);
 
     // Return the newly created election
-    return await getElection(tokenVotingContract, electionId);
+    return await getElection(tokenVotingContract, newElectionId);
   } catch (error) {
     console.error("Error creating election:", error);
     throw new Error("Failed to create election: " + error.message);
   }
 };
 
-// Get candidates for an election - we need to adapt this since your contract
-// doesn't have direct candidate listing
-export const getCandidates = async (tokenVotingContract, electionId) => {
-  try {
-    // In your contract, candidates are tracked by candidateId (number)
-    // We need to check which candidate IDs exist (up to some limit)
-    const candidateLimit = 10; // Check the first 10 possible candidate IDs
-    const candidates = [];
-
-    for (let i = 1; i <= candidateLimit; i++) {
-      try {
-        const isCandidate = await tokenVotingContract
-          .elections(electionId)
-          .candidates(i);
-        if (isCandidate) {
-          const voteCount = await tokenVotingContract
-            .elections(electionId)
-            .votes(i);
-
-          candidates.push({
-            address: `0x${i.toString(16).padStart(40, "0")}`, // Generate a fake address based on ID
-            name: `Candidate ${i}`,
-            platform: "Candidate platform information",
-            voteCount: voteCount.toString(),
-            id: i,
-          });
-        }
-      } catch (error) {
-        // Candidate doesn't exist at this ID, continue to next
-        console.error(`Error checking candidate ${i}:`, error);
-      }
-    }
-
-    return candidates;
-  } catch (error) {
-    console.error(
-      `Error fetching candidates for election ${electionId}:`,
-      error,
-    );
-    throw new Error("Failed to fetch candidates");
-  }
-};
+// Get candidates for an election
 
 // Nominate a candidate
 export const nominateCandidate = async (
@@ -162,9 +135,14 @@ export const nominateCandidate = async (
   candidateId,
 ) => {
   try {
-    // In your contract, nominate takes an electionId and candidateId
+    console.log(
+      `Nominating candidate ${candidateId} for election ${electionId}...`,
+    );
+    // Call contract method to nominate
     const tx = await tokenVotingContract.nominate(electionId, candidateId);
+    console.log("Transaction sent, waiting for confirmation...");
     await tx.wait();
+    console.log("Nomination confirmed");
     return true;
   } catch (error) {
     console.error("Error nominating candidate:", error);
@@ -179,12 +157,31 @@ export const castVote = async (
   candidateId,
 ) => {
   try {
-    // Register before voting
-    await tokenVotingContract.registerVoter(electionId);
+    console.log(
+      `Casting vote for candidate ${candidateId} in election ${electionId}...`,
+    );
+
+    // First register as a voter if not already registered
+    console.log("Registering as voter...");
+    try {
+      const registerTx = await tokenVotingContract.registerVoter(electionId);
+      await registerTx.wait();
+      console.log("Voter registration confirmed");
+    } catch (regError) {
+      // If already registered, this will fail, which is fine
+      console.log(
+        "Registration error (may be already registered):",
+        regError.message,
+      );
+    }
 
     // Then vote
-    const tx = await tokenVotingContract.vote(electionId, candidateId);
-    await tx.wait();
+    console.log("Sending vote transaction...");
+    const voteTx = await tokenVotingContract.vote(electionId, candidateId);
+    console.log("Vote transaction sent, waiting for confirmation...");
+    await voteTx.wait();
+    console.log("Vote confirmed");
+
     return true;
   } catch (error) {
     console.error("Error casting vote:", error);
@@ -199,35 +196,36 @@ export const hasVoted = async (
   voterAddress,
 ) => {
   try {
-    // This is a simplification - your contract doesn't expose this directly
-    // We would need to get the voter info from the contract
-    const voterInfo = await tokenVotingContract
+    console.log(
+      `Checking if ${voterAddress} has voted in election ${electionId}...`,
+    );
+    // Get voter info from the contract
+    const voter = await tokenVotingContract
       .elections(electionId)
       .voters(voterAddress);
-    return voterInfo.hasVoted;
+    return voter && voter.hasVoted;
   } catch (error) {
-    console.error("Error checking if voter has voted:", error);
-    return false; // Assume not voted if we can't check
+    console.error("Error checking voting status:", error);
+    return false; // Assume not voted if there's an error
   }
 };
 
 // Get election results
 export const getElectionResults = async (tokenVotingContract, electionId) => {
   try {
-    // Get the raw results array
-    const resultsArray = await tokenVotingContract.getResults(electionId);
+    console.log(`Getting results for election ${electionId}...`);
+    const results = await tokenVotingContract.getResults(electionId);
+    console.log("Raw results:", results);
 
-    // Get candidates with their data
+    // Get the candidate details to match with results
     const candidates = await getCandidates(tokenVotingContract, electionId);
 
-    // Match results with candidates
-    for (let i = 0; i < Math.min(resultsArray.length, candidates.length); i++) {
-      candidates[i].voteCount = resultsArray[i].toString();
-    }
-
-    return candidates.sort((a, b) => Number(b.voteCount) - Number(a.voteCount));
+    // Sort candidates by vote count
+    return candidates.sort(
+      (a, b) => parseInt(b.voteCount) - parseInt(a.voteCount),
+    );
   } catch (error) {
     console.error("Error getting election results:", error);
-    throw new Error("Failed to get election results");
+    throw new Error("Failed to get election results: " + error.message);
   }
 };

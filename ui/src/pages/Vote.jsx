@@ -19,13 +19,33 @@ function Vote() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [debug, setDebug] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
     async function fetchData() {
       try {
+        if (!contracts || !contracts.tokenVoting) {
+          setError("Please connect your wallet and set up contracts first");
+          setLoading(false);
+          return;
+        }
+
+        setDebug((prev) => ({ ...prev, stage: "Fetching election" }));
+
         // Fetch election details
-        const electionData = await getElection(electionId);
+        const electionData = await getElection(
+          contracts.tokenVoting,
+          electionId,
+        );
+        setDebug((prev) => ({ ...prev, electionData }));
+
+        if (!electionData) {
+          setError(`Election with ID ${electionId} not found`);
+          setLoading(false);
+          return;
+        }
+
         setElection(electionData);
 
         // Check if election is in voting phase
@@ -41,23 +61,43 @@ function Vote() {
           setError("Voting period has ended for this election");
         }
 
+        setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
+
         // Fetch candidates
-        const candidateData = await getCandidates(electionId);
+        const candidateData = await getCandidates(
+          contracts.tokenVoting,
+          electionId,
+        );
+        setDebug((prev) => ({ ...prev, candidateData }));
         setCandidates(candidateData);
 
-        // Check if user has already voted
-        const votedStatus = await hasVoted(electionId, account);
-        setAlreadyVoted(votedStatus);
+        if (account) {
+          setDebug((prev) => ({ ...prev, stage: "Checking voting status" }));
+          // Check if user has already voted
+          try {
+            const votedStatus = await hasVoted(
+              contracts.tokenVoting,
+              electionId,
+              account,
+            );
+            setDebug((prev) => ({ ...prev, votedStatus }));
+            setAlreadyVoted(votedStatus);
+          } catch (votedErr) {
+            console.warn("Error checking voted status:", votedErr);
+            setDebug((prev) => ({ ...prev, votedError: votedErr.message }));
+          }
+        }
       } catch (err) {
+        console.error("Vote page error:", err);
         setError("Failed to load election details: " + err.message);
-        console.error(err);
+        setDebug((prev) => ({ ...prev, error: err.message }));
       } finally {
         setLoading(false);
       }
     }
 
     fetchData();
-  }, [electionId, account]);
+  }, [electionId, contracts, account]);
 
   const handleVote = async () => {
     if (!selectedCandidate) {
@@ -100,6 +140,11 @@ function Vote() {
       <div className="text-center py-10">
         <div className="spinner"></div>
         <p>Loading election details...</p>
+        <div className="mt-4 text-sm text-gray-500">
+          <pre className="text-xs text-left max-w-lg mx-auto bg-gray-100 p-2 rounded">
+            Debug: {JSON.stringify(debug, null, 2)}
+          </pre>
+        </div>
       </div>
     );
   }
@@ -108,6 +153,11 @@ function Vote() {
     return (
       <div className="text-center py-10">
         <p className="text-red-600">Election not found</p>
+        <div className="mt-4 text-sm text-gray-500">
+          <pre className="text-xs text-left max-w-lg mx-auto bg-gray-100 p-2 rounded">
+            Debug: {JSON.stringify(debug, null, 2)}
+          </pre>
+        </div>
         <Link
           to="/elections"
           className="text-blue-500 hover:underline mt-4 inline-block"
@@ -117,7 +167,6 @@ function Vote() {
       </div>
     );
   }
-
   const now = new Date();
   const nominationEnd = new Date(election.nominationEndDate);
   const electionEnd = new Date(election.endDate);

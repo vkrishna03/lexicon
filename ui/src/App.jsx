@@ -11,6 +11,7 @@ import Results from "./pages/Results";
 import Vote from "./pages/Vote";
 import SetupContracts from "./pages/SetupContracts";
 import TokenAllocation from "./pages/TokenAllocationPage";
+import ContractTest from "./pages/ContractTest";
 
 function App() {
   return (
@@ -40,6 +41,7 @@ function AppContent() {
           <Route path="/results/:electionId" element={<Results />} />
           <Route path="/setup" element={<SetupContracts />} />
           <Route path="/tokens" element={<TokenAllocation />} />
+          <Route path="/contract-test" element={<ContractTest />} />
         </Routes>
       </div>
     </>

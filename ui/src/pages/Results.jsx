@@ -1,45 +1,79 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getCandidates, getElection } from "../services/blockchainService";
+import { useWeb3 } from "../contexts/Web3Context";
 
 function Results() {
+  const { contracts } = useWeb3();
   const { electionId } = useParams();
   const [election, setElection] = useState(null);
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [debug, setDebug] = useState({});
 
   useEffect(() => {
     async function fetchData() {
       try {
+        if (!contracts || !contracts.tokenVoting) {
+          setError("Please connect your wallet and set up contracts first");
+          setLoading(false);
+          return;
+        }
+
+        setDebug((prev) => ({ ...prev, stage: "Fetching election" }));
+
         // Fetch election details
-        const electionData = await getElection(electionId);
+        const electionData = await getElection(
+          contracts.tokenVoting,
+          electionId,
+        );
+        setDebug((prev) => ({ ...prev, electionData }));
+
+        if (!electionData) {
+          setError(`Election with ID ${electionId} not found`);
+          setLoading(false);
+          return;
+        }
+
         setElection(electionData);
 
+        setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
+
         // Fetch candidates with vote counts
-        const candidateData = await getCandidates(electionId);
+        const candidateData = await getCandidates(
+          contracts.tokenVoting,
+          electionId,
+        );
+        setDebug((prev) => ({ ...prev, candidateData }));
 
         // Sort candidates by vote count in descending order
         const sortedCandidates = candidateData.sort(
-          (a, b) => b.voteCount - a.voteCount,
+          (a, b) => Number(b.voteCount) - Number(a.voteCount),
         );
         setCandidates(sortedCandidates);
       } catch (err) {
+        console.error("Results page error:", err);
         setError("Failed to load election results: " + err.message);
-        console.error(err);
+        setDebug((prev) => ({ ...prev, error: err.message }));
       } finally {
         setLoading(false);
       }
     }
 
     fetchData();
-  }, [electionId]);
+  }, [electionId, contracts]);
 
   if (loading) {
     return (
       <div className="text-center py-10">
         <div className="spinner"></div>
         <p>Loading election results...</p>
+        <div className="mt-4 text-sm text-gray-500">
+          <pre className="text-xs text-left max-w-lg mx-auto bg-gray-100 p-2 rounded">
+            Debug: {JSON.stringify(debug, null, 2)}
+          </pre>
+        </div>
       </div>
     );
   }
@@ -48,6 +82,11 @@ function Results() {
     return (
       <div className="text-center py-10">
         <p className="text-red-600">Election not found</p>
+        <div className="mt-4 text-sm text-gray-500">
+          <pre className="text-xs text-left max-w-lg mx-auto bg-gray-100 p-2 rounded">
+            Debug: {JSON.stringify(debug, null, 2)}
+          </pre>
+        </div>
         <Link
           to="/elections"
           className="text-blue-500 hover:underline mt-4 inline-block"

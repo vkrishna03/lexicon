@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useWeb3 } from "../contexts/Web3Context";
 import {
   getCandidates,
   getElection,
   nominateCandidate,
 } from "../services/blockchainService";
-import { useWeb3 } from "../contexts/Web3Context";
 
 function Nominate() {
   const { account, contracts } = useWeb3();
@@ -19,13 +19,33 @@ function Nominate() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [debug, setDebug] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
     async function fetchData() {
       try {
+        if (!contracts || !contracts.tokenVoting) {
+          setError("Please connect your wallet and set up contracts first");
+          setLoading(false);
+          return;
+        }
+
+        setDebug((prev) => ({ ...prev, stage: "Fetching election" }));
+
         // Fetch election details
-        const electionData = await getElection(electionId);
+        const electionData = await getElection(
+          contracts.tokenVoting,
+          electionId,
+        );
+        setDebug((prev) => ({ ...prev, electionData }));
+
+        if (!electionData) {
+          setError(`Election with ID ${electionId} not found`);
+          setLoading(false);
+          return;
+        }
+
         setElection(electionData);
 
         // Check if election is in nomination phase
@@ -36,19 +56,26 @@ function Nominate() {
           setError("Nomination period has ended for this election");
         }
 
+        setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
+
         // Fetch existing candidates
-        const candidateData = await getCandidates(electionId);
+        const candidateData = await getCandidates(
+          contracts.tokenVoting,
+          electionId,
+        );
+        setDebug((prev) => ({ ...prev, candidateData }));
         setCandidates(candidateData);
       } catch (err) {
+        console.error("Nominate page error:", err);
         setError("Failed to load election details: " + err.message);
-        console.error(err);
+        setDebug((prev) => ({ ...prev, error: err.message }));
       } finally {
         setLoading(false);
       }
     }
 
     fetchData();
-  }, [electionId]);
+  }, [electionId, contracts, account]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -66,7 +93,7 @@ function Nominate() {
       }
 
       // Generate a candidate ID (could be a simple number or derived from form data)
-      const candidateId = Math.floor(Math.random() * 1000) + 1; // Random ID between 1-1000
+      const candidateId = Math.floor(Math.random() * 100) + 1; // Random ID between 1-100
 
       // Call the nominate function with electionId and candidateId
       await nominateCandidate(contracts.tokenVoting, electionId, candidateId);
@@ -96,6 +123,11 @@ function Nominate() {
       <div className="text-center py-10">
         <div className="spinner"></div>
         <p>Loading election details...</p>
+        <div className="mt-4 text-sm text-gray-500">
+          <pre className="text-xs text-left max-w-lg mx-auto bg-gray-100 p-2 rounded">
+            Debug: {JSON.stringify(debug, null, 2)}
+          </pre>
+        </div>
       </div>
     );
   }
@@ -104,6 +136,11 @@ function Nominate() {
     return (
       <div className="text-center py-10">
         <p className="text-red-600">Election not found</p>
+        <div className="mt-4 text-sm text-gray-500">
+          <pre className="text-xs text-left max-w-lg mx-auto bg-gray-100 p-2 rounded">
+            Debug: {JSON.stringify(debug, null, 2)}
+          </pre>
+        </div>
         <Link
           to="/elections"
           className="text-blue-500 hover:underline mt-4 inline-block"
@@ -119,6 +156,7 @@ function Nominate() {
   const isNominationActive = now <= nominationEnd;
 
   return (
+    // Rest of the component remains the same...
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <Link to="/elections" className="text-blue-500 hover:underline">

@@ -8,40 +8,62 @@ function ElectionList() {
   const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [debugging, setDebugging] = useState({});
 
   useEffect(() => {
     async function fetchElections() {
-      if (!contracts || !contracts.tokenVoting) {
+      if (!account) {
         setError("Please connect your wallet to view elections");
         setLoading(false);
         return;
       }
 
+      if (!contracts || !contracts.tokenVoting) {
+        setError("Contract not initialized. Please go to Setup page first.");
+        setLoading(false);
+        return;
+      }
+
       try {
+        console.log("Fetching elections from blockchain...");
+        setDebugging((prev) => ({ ...prev, status: "Fetching elections" }));
+
+        // Try to get election count for debugging
+        try {
+          const countBN = await contracts.tokenVoting.electionCount();
+          const count = parseInt(countBN.toString());
+          console.log("Election count:", count);
+          setDebugging((prev) => ({ ...prev, electionCount: count }));
+
+          if (count === 0) {
+            setElections([]);
+            setLoading(false);
+            return;
+          }
+        } catch (countError) {
+          console.error("Error getting election count:", countError);
+          setDebugging((prev) => ({ ...prev, countError: countError.message }));
+          setError("Error getting election count: " + countError.message);
+          setLoading(false);
+          return;
+        }
+
+        // Get all elections
         const electionData = await getElections(contracts.tokenVoting);
+        console.log("Fetched elections:", electionData);
+        setDebugging((prev) => ({ ...prev, electionData }));
         setElections(electionData);
       } catch (err) {
+        console.error("Failed to load elections:", err);
+        setDebugging((prev) => ({ ...prev, error: err.message }));
         setError("Failed to load elections: " + err.message);
-        console.error(err);
       } finally {
         setLoading(false);
       }
     }
 
-    if (contracts?.tokenVoting) {
-      const filter = contracts.tokenVoting.filters.ElectionCreated();
-      const listener = () => {
-        // Refresh elections when a new one is created
-        fetchElections();
-      };
-
-      contracts.tokenVoting.on(filter, listener);
-
-      return () => {
-        contracts.tokenVoting.off(filter, listener);
-      };
-    }
-  }, [contracts]);
+    fetchElections();
+  }, [contracts, account]);
 
   if (!account) {
     return (
@@ -62,6 +84,12 @@ function ElectionList() {
       <div className="text-center py-10">
         <div className="spinner"></div>
         <p>Loading elections...</p>
+        <div className="mt-4 text-sm text-gray-500">
+          <p>Debug info:</p>
+          <pre className="text-xs text-left max-w-lg mx-auto overflow-auto bg-gray-100 p-2 rounded">
+            {JSON.stringify(debugging, null, 2)}
+          </pre>
+        </div>
       </div>
     );
   }
@@ -80,14 +108,27 @@ function ElectionList() {
 
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
+          <p className="font-bold">Error:</p>
+          <p>{error}</p>
+          <div className="mt-2">
+            <p className="text-sm">Debug info:</p>
+            <pre className="text-xs overflow-auto bg-red-50 p-2 rounded mt-1">
+              {JSON.stringify(debugging, null, 2)}
+            </pre>
+          </div>
         </div>
       )}
 
       {elections.length === 0 ? (
         <div className="text-center py-10 bg-white rounded-lg shadow p-6">
           <p className="text-gray-600">No elections are currently available.</p>
-          <p className="mt-2">Be the first to create an election!</p>
+          <p className="mt-2">Create your first election!</p>
+          <Link
+            to="/create-election"
+            className="mt-4 inline-block bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
+          >
+            Create Election
+          </Link>
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2">
