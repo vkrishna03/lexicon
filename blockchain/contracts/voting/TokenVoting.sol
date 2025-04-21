@@ -37,7 +37,10 @@ contract TokenVoting {
         uint256 candidateId,
         uint256 voteWeight
     );
-    event CandidateNominated(uint256 electionId, uint256 candidateId);
+    event CandidateNominated(
+        uint256 indexed electionId,
+        uint256 indexed candidateId
+    );
 
     constructor(address tokenAddress) {
         votingToken = IERC20(tokenAddress);
@@ -139,15 +142,24 @@ contract TokenVoting {
     }
 
     function deactivateElection(uint256 electionId) public {
-        require(block.timestamp > elections[electionId].endTime, "Election is still active.");
-        require(elections[electionId].isActive, "Election is already inactive.");
+        require(
+            block.timestamp > elections[electionId].endTime,
+            "Election is still active."
+        );
+        require(
+            elections[electionId].isActive,
+            "Election is already inactive."
+        );
         elections[electionId].isActive = false;
     }
 
     function getResults(
         uint256 electionId
     ) public view returns (uint256[] memory) {
-        require(block.timestamp > elections[electionId].endTime, "Election is still active.");
+        require(
+            block.timestamp > elections[electionId].endTime,
+            "Election is still active."
+        );
 
         uint256 candidateCount = 0;
         for (uint256 i = 0; i < 100; i++) {
