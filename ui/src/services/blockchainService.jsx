@@ -1,5 +1,3 @@
-import { ethers } from "ethers";
-
 // Helper to convert timestamp to seconds
 const toBlockchainTimestamp = (dateString) => {
   return Math.floor(new Date(dateString).getTime() / 1000);
@@ -154,7 +152,8 @@ export const getCandidates = async (tokenVotingContract, electionId) => {
 
         // The correct way to filter is only on indexed parameters
         // And the electionId needs to be a BigNumber or a proper value type
-        const electionIdValue = ethers.BigNumber.from(electionId);
+        
+        const electionIdValue = BigInt(electionId); 
         const filter = tokenVotingContract.filters.CandidateNominated(
           electionIdValue,
           null,
