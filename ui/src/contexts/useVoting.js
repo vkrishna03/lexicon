@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { VotingContext } from './VotingContext';
+import { VotingContext } from './votingContextDefs.js';
 
 export function useVoting() {
   const context = useContext(VotingContext);

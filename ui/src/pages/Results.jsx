@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useVoting } from "../contexts/useVoting";
 
 function Results() {
-  const { getElection, getResults } = useVoting();
+  const { getElection, getResults, getCandidates } = useVoting();
   const { electionId } = useParams();
   const [election, setElection] = useState(null);
   const [candidates, setCandidates] = useState([]);
@@ -26,18 +26,27 @@ function Results() {
           return;
         }
 
-        setElection(electionData);
+        // Format the election data for the UI
+        const formattedElection = {
+          id: electionData.id,
+          title: electionData.name,
+          description: electionData.description,
+          nominationEndDate: electionData.nominationEnd,
+          endDate: electionData.votingEnd,
+          state: electionData.state,
+          totalVotes: electionData.totalVotes,
+        };
 
-        setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
+        setElection(formattedElection);
 
-        // Fetch candidates with vote counts
-        const candidateData = await getResults(electionId);
-        setDebug((prev) => ({ ...prev, candidateData }));
+        // Fetch candidates
+        const candidateData = await getCandidates(electionId);
 
         // Sort candidates by vote count in descending order
         const sortedCandidates = candidateData.sort(
           (a, b) => Number(b.voteCount) - Number(a.voteCount),
         );
+
         setCandidates(sortedCandidates);
       } catch (err) {
         console.error("Results page error:", err);
@@ -49,7 +58,7 @@ function Results() {
     }
 
     fetchData();
-  }, [electionId, getElection, getResults]);
+  }, [electionId, getElection, getCandidates]);
 
   if (loading) {
     return (

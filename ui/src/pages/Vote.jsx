@@ -2,9 +2,10 @@ import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useVoting } from "../contexts/useVoting";
 import TransactionStatus from "../components/TransactionStatus";
+import { contractManager } from "../utils/contractUtils";
 
 function Vote() {
-  const { account, getElection, getCandidates, vote } = useVoting();
+  const { account, getElection, getCandidates, castVote } = useVoting();
   const { electionId } = useParams();
   const [election, setElection] = useState(null);
   const [candidates, setCandidates] = useState([]);
@@ -31,12 +32,23 @@ function Vote() {
           return;
         }
 
-        setElection(electionData);
+        // Format the election data for the UI
+        const formattedElection = {
+          id: electionData.id,
+          title: electionData.name,
+          description: electionData.description,
+          votingStartDate: electionData.votingStart,
+          nominationEndDate: electionData.nominationEnd,
+          endDate: electionData.votingEnd,
+          state: electionData.state,
+        };
+
+        setElection(formattedElection);
 
         // Check if election is in voting phase
         const now = new Date();
-        const votingStart = new Date(electionData.votingStartDate);
-        const votingEnd = new Date(electionData.endDate);
+        const votingStart = new Date(electionData.votingStart);
+        const votingEnd = new Date(electionData.votingEnd);
 
         if (now < votingStart) {
           setError("Voting has not started yet for this election");
@@ -48,8 +60,16 @@ function Vote() {
 
         // Fetch candidates
         const candidateData = await getCandidates(electionId);
-        setDebug((prev) => ({ ...prev, candidateData }));
         setCandidates(candidateData);
+
+        // Check if user has already voted for this election
+        if (account) {
+          const hasVoted = await contractManager.hasUserVoted(
+            electionId,
+            account,
+          );
+          setAlreadyVoted(hasVoted);
+        }
       } catch (err) {
         console.error("Vote page error:", err);
         setError("Failed to load election details: " + err.message);
@@ -83,7 +103,7 @@ function Vote() {
       }
 
       // Cast vote by candidate ID
-      await vote.castVote(electionId, candidateId);
+      await castVote(electionId, candidateId);
       setSuccess("Your vote has been recorded successfully!");
       setAlreadyVoted(true);
     } catch (err) {

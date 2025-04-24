@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
-import VotingSystemABI from "../../../blockchain/artifacts/contracts/VotingSystem.sol/VotingSystem.json";
-import VotingTokenABI from "../../../blockchain/artifacts/contracts/VotingToken.sol/VotingToken.json";
-import deployedAddresses from "../../../blockchain/deployment/addresses.json";
+import VotingSystemABI from "../abis/VotingSystem.json";
+import VotingTokenABI from "../abis/VotingToken.json";
+import deployedAddresses from "../contractAddresses.json";
 
 class ContractManager {
   constructor() {
@@ -27,13 +27,13 @@ class ContractManager {
       this.votingSystem = new ethers.Contract(
         deployedAddresses.votingSystem,
         VotingSystemABI.abi,
-        this.provider
+        this.provider,
       );
 
       this.votingToken = new ethers.Contract(
         deployedAddresses.votingToken,
         VotingTokenABI.abi,
-        this.provider
+        this.provider,
       );
 
       console.log("Contracts loaded automatically from deployment");
@@ -46,7 +46,7 @@ class ContractManager {
   async autoConnectWallet() {
     try {
       const accounts = await this.provider.listAccounts();
-      
+
       if (accounts.length === 0) {
         throw new Error("No accounts available. Is Hardhat running?");
       }
@@ -63,7 +63,7 @@ class ContractManager {
 
       return {
         address: account.address,
-        index: 0
+        index: 0,
       };
     } catch (error) {
       console.error("Error in auto wallet connection:", error);
@@ -74,7 +74,7 @@ class ContractManager {
   async switchAccount(accountIndex) {
     try {
       const accounts = await this.provider.listAccounts();
-      
+
       if (accountIndex >= accounts.length) {
         throw new Error("Account index out of range");
       }
@@ -90,7 +90,7 @@ class ContractManager {
 
       return {
         address: account.address,
-        index: accountIndex
+        index: accountIndex,
       };
     } catch (error) {
       console.error("Error switching account:", error);

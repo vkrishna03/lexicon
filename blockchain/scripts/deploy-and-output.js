@@ -47,19 +47,22 @@ async function main() {
   for (let i = 1; i < 10; i++) {
     await votingToken.transfer(
       accounts[i].address,
-      hre.ethers.parseEther("1000"),
+      hre.ethers.parseEther("1000")
     );
     console.log(
-      `Transferred 1000 tokens to account ${i}: ${accounts[i].address}`,
+      `Transferred 1000 tokens to account ${i}: ${accounts[i].address}`
     );
   }
 
   // Grant tokens to VotingSystem contract for operations
   await votingToken.transfer(
     votingSystemAddress,
-    hre.ethers.parseEther("100000"),
+    hre.ethers.parseEther("100000")
   );
   console.log("Transferred initial tokens to VotingSystem contract");
+
+  console.log("\nUpdating contract ABIs for UI...");
+  require("./update-abis");
 }
 
 main()

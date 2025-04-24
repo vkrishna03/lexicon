@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useVoting } from "../contexts/useVoting";
 
@@ -9,20 +9,24 @@ function ElectionList() {
   const [error, setError] = useState("");
   const [debug] = useState({});
 
-  useEffect(() => {
-    async function fetchElections() {
-      try {
-        setLoading(true);
-        const electionData = await getElections();
-        setElections(electionData);
-      } catch (err) {
-        setError("Failed to load elections: " + err.message);
-      } finally {
-        setLoading(false);
-      }
+  // Use a callback to stabilize the fetchElections function
+  const fetchElections = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Get elections using our getElections function from the context
+      const electionData = await getElections();
+      setElections(electionData);
+    } catch (err) {
+      setError("Failed to load elections: " + err.message);
+      console.error("Error loading elections:", err);
+    } finally {
+      setLoading(false);
     }
-    fetchElections();
   }, [getElections]);
+
+  useEffect(() => {
+    fetchElections();
+  }, [fetchElections]);
 
   if (loading) {
     return (
@@ -91,33 +95,34 @@ function ElectionList() {
                   <span className="font-medium">Status:</span> {election.status}
                 </p>
                 <p>
-                  <span className="font-medium">Start:</span>{" "}
-                  {new Date(election.startDate).toLocaleString()}
+                  <span className="font-medium">Nomination:</span>{" "}
+                  {new Date(election.startDate * 1000).toLocaleString()} -{" "}
+                  {new Date(election.nominationEndDate * 1000).toLocaleString()}
                 </p>
                 <p>
-                  <span className="font-medium">End:</span>{" "}
-                  {new Date(election.endDate).toLocaleString()}
+                  <span className="font-medium">Voting:</span>{" "}
+                  {new Date(election.votingStartDate * 1000).toLocaleString()} -{" "}
+                  {new Date(election.endDate * 1000).toLocaleString()}
                 </p>
               </div>
 
               <div className="mt-6 flex flex-wrap gap-2">
-                {election.status === "Active" && (
-                  <>
-                    <Link
-                      to={`/nominate/${election.id}`}
-                      className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded"
-                    >
-                      Nominate
-                    </Link>
-                    <Link
-                      to={`/vote/${election.id}`}
-                      className="bg-purple-500 hover:bg-purple-600 text-white text-sm font-bold py-2 px-3 rounded"
-                    >
-                      Vote
-                    </Link>
-                  </>
+                {election.timeStatus.phase.includes("Nomination") && (
+                  <Link
+                    to={`/nominate/${election.id}`}
+                    className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded"
+                  >
+                    Nominate
+                  </Link>
                 )}
-
+                {election.timeStatus.phase.includes("Voting") && (
+                  <Link
+                    to={`/vote/${election.id}`}
+                    className="bg-purple-500 hover:bg-purple-600 text-white text-sm font-bold py-2 px-3 rounded"
+                  >
+                    Vote
+                  </Link>
+                )}
                 <Link
                   to={`/results/${election.id}`}
                   className="bg-gray-500 hover:bg-gray-600 text-white text-sm font-bold py-2 px-3 rounded"

@@ -3,7 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { useVoting } from "../contexts/useVoting";
 
 function Nominate() {
-  const { account, getElection, nominateCandidate, getAllCandidates } = useVoting();
+  const { account, getElection, nominateCandidate, getCandidates } =
+    useVoting();
   const { electionId } = useParams();
   const [election, setElection] = useState(null);
   const [candidates, setCandidates] = useState([]);
@@ -19,14 +20,14 @@ function Nominate() {
   const loadCandidates = useCallback(async () => {
     try {
       setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
-      const candidateData = await getAllCandidates(electionId);
+      const candidateData = await getCandidates(electionId);
       setDebug((prev) => ({ ...prev, candidateData }));
       setCandidates(candidateData);
     } catch (err) {
       console.error("Error loading candidates:", err);
       setDebug((prev) => ({ ...prev, candidateError: err.message }));
     }
-  }, [electionId, getAllCandidates]);
+  }, [electionId, getCandidates]);
 
   useEffect(() => {
     async function fetchData() {
@@ -43,12 +44,23 @@ function Nominate() {
           return;
         }
 
-        setElection(electionData);
+        // Format the election data for the UI
+        const formattedElection = {
+          id: electionData.id,
+          title: electionData.name,
+          description: electionData.description,
+          startDate: electionData.nominationStart,
+          nominationEndDate: electionData.nominationEnd,
+          endDate: electionData.votingEnd,
+          state: electionData.state,
+        };
+
+        setElection(formattedElection);
         await loadCandidates();
 
         // Check if election is in nomination phase
         const now = new Date();
-        const nominationEnd = new Date(electionData.nominationEndDate);
+        const nominationEnd = new Date(electionData.nominationEnd);
 
         if (now > nominationEnd) {
           setError("Nomination period has ended for this election");
