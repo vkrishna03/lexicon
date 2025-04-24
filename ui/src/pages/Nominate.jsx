@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useVoting } from "../contexts/useVoting";
+import { contractManager } from "../utils/contractUtils";
 
 function Nominate() {
   const { account, getElection, nominateCandidate, getCandidates } =
@@ -33,6 +34,16 @@ function Nominate() {
     async function fetchData() {
       try {
         setDebug((prev) => ({ ...prev, stage: "Fetching election" }));
+
+        if (account) {
+          const eligibility = await contractManager.canUserNominate(
+            electionId,
+            account,
+          );
+          if (!eligibility.canNominate) {
+            setError(`Nomination not allowed: ${eligibility.reason}`);
+          }
+        }
 
         // Fetch election details
         const electionData = await getElection(electionId);

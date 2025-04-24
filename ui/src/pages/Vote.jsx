@@ -26,6 +26,9 @@ function Vote() {
         const electionData = await getElection(electionId);
         setDebug((prev) => ({ ...prev, electionData }));
 
+        // Log the timeStatus
+        console.log("Election data timeStatus:", electionData.timeStatus);
+
         if (!electionData) {
           setError(`Election with ID ${electionId} not found`);
           setLoading(false);
@@ -45,17 +48,6 @@ function Vote() {
 
         setElection(formattedElection);
 
-        // Check if election is in voting phase
-        const now = new Date();
-        const votingStart = new Date(electionData.votingStart);
-        const votingEnd = new Date(electionData.votingEnd);
-
-        if (now < votingStart) {
-          setError("Voting has not started yet for this election");
-        } else if (now > votingEnd) {
-          setError("Voting has ended for this election");
-        }
-
         setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
 
         // Fetch candidates
@@ -69,6 +61,42 @@ function Vote() {
             account,
           );
           setAlreadyVoted(hasVoted);
+        }
+
+        // Check if election is in voting phase using the state information
+        const isVotingActive =
+          electionData.timeStatus &&
+          electionData.timeStatus.phase &&
+          electionData.timeStatus.phase.includes("Voting period active");
+
+        if (!isVotingActive) {
+          if (electionData.timeStatus.phase.includes("Nomination")) {
+            setError(
+              "Voting has not started yet for this election. It's still in the nomination phase.",
+            );
+          } else if (electionData.timeStatus.phase.includes("ended")) {
+            setError("Voting has ended for this election");
+          } else {
+            setError(electionData.timeStatus.phase);
+          }
+
+          if (electionData.timeStatus) {
+            const phase = electionData.timeStatus.phase;
+
+            if (!phase.includes("Voting period active")) {
+              if (phase.includes("Nomination")) {
+                setError(
+                  "Voting has not started yet. It's still in the nomination phase.",
+                );
+              } else if (phase.includes("ended")) {
+                setError("Voting has ended for this election");
+              } else if (phase.includes("Waiting for voting")) {
+                setError("Voting will start soon. Please check back later.");
+              } else {
+                setError(phase); // Show the actual phase message
+              }
+            }
+          }
         }
       } catch (err) {
         console.error("Vote page error:", err);
@@ -150,7 +178,10 @@ function Vote() {
   const now = new Date();
   const nominationEnd = new Date(election.nominationEndDate);
   const electionEnd = new Date(election.endDate);
-  const isVotingActive = now >= nominationEnd && now <= electionEnd;
+  const isVotingActive =
+    election.timeStatus &&
+    election.timeStatus.phase &&
+    election.timeStatus.phase.includes("Voting period active");
 
   return (
     <div className="max-w-4xl mx-auto">

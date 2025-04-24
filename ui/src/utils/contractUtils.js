@@ -109,7 +109,6 @@ class ContractManager {
   ) {
     try {
       // Convert date strings to Unix timestamps (seconds)
-
       const nominationStartTime = Math.floor(
         new Date(nominationStart).getTime() / 1000,
       );
@@ -120,6 +119,15 @@ class ContractManager {
         new Date(votingStart).getTime() / 1000,
       );
       const votingEndTime = Math.floor(new Date(votingEnd).getTime() / 1000);
+
+      // Add validation to ensure timestamps are in order
+      if (
+        nominationStartTime >= nominationEndTime ||
+        nominationEndTime >= votingStartTime ||
+        votingStartTime >= votingEndTime
+      ) {
+        throw new Error("Election phases must be in chronological order");
+      }
 
       console.log("Creating election with dates (seconds since epoch):", {
         nominationStartTime,
@@ -137,10 +145,19 @@ class ContractManager {
         votingEndTime,
       );
 
-      console.log("Transaction sent:", tx.hash);
-
+      // Wait for transaction to be mined
       const receipt = await tx.wait();
       console.log("Transaction receipt:", receipt);
+
+      // Important: call updateElectionState to ensure the state is set correctly
+      const electionId = await this.votingSystem.electionCount();
+
+      if (electionId) {
+        // Update the election state immediately
+        await this.updateElectionState(electionId);
+        console.log(`Created and updated election ${electionId}`);
+      }
+
       return {
         transactionHash: tx.hash,
         success: true,
@@ -170,9 +187,17 @@ class ContractManager {
     try {
       // First approve token spending
       const votingPower = await this.votingSystem.getVotingPower(
-        this.currentWallet.address,
+        await this.currentWallet.getAddress(),
       );
-      await this.votingToken.approve(this.votingSystem.address, votingPower);
+
+      console.log("Approving tokens for voting:", votingPower.toString());
+
+      const approveTx = await this.votingToken.approve(
+        this.votingSystem.address,
+        votingPower,
+      );
+      await approveTx.wait();
+      console.log("Token approval confirmed");
 
       const tx = await this.votingSystem.castVote(electionId, candidateId);
       const receipt = await tx.wait();
@@ -186,35 +211,18 @@ class ContractManager {
   // View Functions
   async getElectionDetails(electionId) {
     try {
+      await this.updateElectionState(electionId);
       const details = await this.votingSystem.getElectionDetails(electionId);
 
-      console.log("Raw timestamp values:", {
-        nominationStart: details[2],
-        nominationEnd: details[3],
-        votingStart: details[4],
-        votingEnd: details[5],
-      });
-
-      const convertTimestamp = (timestamp) => {
-        const num = Number(timestamp);
-        // If the timestamp is very large (represents a date past year 3000),
-        // it's likely already in milliseconds
-        if (num > 32503680000) {
-          // Jan 1, 3000 in seconds since epoch
-          return new Date(num);
-        }
-        // Otherwise, assume it's in seconds and convert to milliseconds
-        return new Date(num * 1000);
-      };
-
+      // Always convert to milliseconds for JavaScript Date objects
       return {
         name: details[0],
         description: details[1],
         nominationStart: new Date(Number(details[2]) * 1000),
-        nominationEnd: convertTimestamp(details[3]),
-        votingStart: convertTimestamp(details[4]),
-        votingEnd: convertTimestamp(details[5]),
-        state: details[6].toString(),
+        nominationEnd: new Date(Number(details[3]) * 1000),
+        votingStart: new Date(Number(details[4]) * 1000),
+        votingEnd: new Date(Number(details[5]) * 1000),
+        state: Number(details[6]), // Use Number to get proper enum value
         totalVotes: details[7].toString(),
       };
     } catch (error) {
@@ -252,6 +260,10 @@ class ContractManager {
   async getElectionTimeStatus(electionId) {
     try {
       const status = await this.votingSystem.getElectionTimeStatus(electionId);
+
+      // Make sure we log the phase to debug
+      console.log("Election phase from contract:", status[2]);
+
       return {
         state: Number(status[0]),
         timeUntilNext: status[1].toString(),
@@ -285,6 +297,8 @@ class ContractManager {
 
   async canUserNominate(electionId, address) {
     try {
+      await this.updateElectionState(electionId);
+
       const [canNominate, reason] = await this.votingSystem.canNominate(
         electionId,
         address,
@@ -297,6 +311,9 @@ class ContractManager {
   }
 
   async canUserVote(electionId, address) {
+    // First update the election state
+    await this.updateElectionState(electionId);
+
     try {
       const [canVote, reason] = await this.votingSystem.canVote(
         electionId,
@@ -330,6 +347,17 @@ class ContractManager {
     } catch (error) {
       console.error("Error approving tokens:", error);
       throw error;
+    }
+  }
+
+  async updateElectionState(electionId) {
+    try {
+      // Call the contract's updateElectionState function
+      const tx = await this.votingSystem.updateElectionState(electionId);
+      await tx.wait();
+      console.log(`Updated election ${electionId} state`);
+    } catch (error) {
+      console.error("Error updating election state:", error);
     }
   }
 }

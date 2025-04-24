@@ -183,7 +183,7 @@ export function VotingProvider({ children }) {
 
           const eligibility = await contractManager.canUserNominate(
             electionId,
-            state.wallet.address,
+            state.account,
           );
 
           if (!eligibility.canNominate) {
@@ -209,9 +209,11 @@ export function VotingProvider({ children }) {
         try {
           updateState({ loading: true, error: null });
 
+          await contractManager.updateElectionState(electionId);
+
           const eligibility = await contractManager.canUserVote(
             electionId,
-            state.wallet.address,
+            state.account,
           );
 
           if (!eligibility.canVote) {
@@ -245,6 +247,9 @@ export function VotingProvider({ children }) {
             contractManager.getAllCandidates(electionId),
             contractManager.getElectionTimeStatus(electionId),
           ]);
+
+          // Add debug log
+          console.log("Election timeStatus:", timeStatus);
 
           return { id: electionId, ...details, candidates, timeStatus };
         } catch (error) {
