@@ -193,8 +193,8 @@ function Results() {
                   {candidates[0].name}
                 </p>
                 <p className="text-green-600">
-                  {formatVoteCount(candidates[0].voteCount)} votes (
-                  {calculatePercentage(candidates[0].voteCount, totalVotes)}%)
+                  {formatVoteCount(BigInt(candidates[0].voteCount))} votes (
+                  {calculatePercentage(BigInt(candidates[0].voteCount), totalVotes)}%)
                 </p>
               </div>
             )}
