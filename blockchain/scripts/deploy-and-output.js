@@ -3,7 +3,6 @@ const path = require("path");
 const hre = require("hardhat");
 
 async function main() {
-  // Get signers
   const [deployer] = await hre.ethers.getSigners();
   console.log("Deploying contracts with the account:", deployer.address);
 
@@ -15,31 +14,37 @@ async function main() {
   const votingTokenAddress = await votingToken.getAddress();
   console.log("VotingToken deployed to:", votingTokenAddress);
 
-  // Deploy TokenVoting
-  const TokenVoting = await hre.ethers.getContractFactory("TokenVoting");
-  const tokenVoting = await TokenVoting.deploy(votingTokenAddress);
-  await tokenVoting.waitForDeployment();
-  const tokenVotingAddress = await tokenVoting.getAddress();
-  console.log("TokenVoting deployed to:", tokenVotingAddress);
+  // Deploy VotingSystem
+  const VotingSystem = await hre.ethers.getContractFactory("VotingSystem");
+  const votingSystem = await VotingSystem.deploy(votingTokenAddress);
+  await votingSystem.waitForDeployment();
+  const votingSystemAddress = await votingSystem.getAddress();
+  console.log("VotingSystem deployed to:", votingSystemAddress);
 
   // Save addresses to a file
   const addresses = {
     votingToken: votingTokenAddress,
-    tokenVoting: tokenVotingAddress,
+    votingSystem: votingSystemAddress,
   };
 
-  const addressesFilePath = path.join(
-    __dirname,
-    "../../ui/src/contractAddresses.json",
-  );
-  fs.writeFileSync(addressesFilePath, JSON.stringify(addresses, null, 2));
+  // Save to multiple locations for different uses
+  const locations = [
+    path.join(__dirname, "../../ui/src/contractAddresses.json"),
+    path.join(__dirname, "../deployment/addresses.json"),
+  ];
 
-  console.log(`Contract addresses saved to ${addressesFilePath}`);
+  locations.forEach((filePath) => {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(filePath, JSON.stringify(addresses, null, 2));
+    console.log(`Contract addresses saved to ${filePath}`);
+  });
 
-  // Transfer some tokens to other accounts for testing
+  // Setup initial test accounts with tokens
   const accounts = await hre.ethers.getSigners();
-
-  for (let i = 1; i < 5; i++) {
+  for (let i = 1; i < 10; i++) {
     await votingToken.transfer(
       accounts[i].address,
       hre.ethers.parseEther("1000"),
@@ -48,6 +53,13 @@ async function main() {
       `Transferred 1000 tokens to account ${i}: ${accounts[i].address}`,
     );
   }
+
+  // Grant tokens to VotingSystem contract for operations
+  await votingToken.transfer(
+    votingSystemAddress,
+    hre.ethers.parseEther("100000"),
+  );
+  console.log("Transferred initial tokens to VotingSystem contract");
 }
 
 main()
