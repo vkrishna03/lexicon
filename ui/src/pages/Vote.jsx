@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import { useVoting } from "../contexts/useVoting";
-import TransactionStatus from "../components/TransactionStatus";
 import { contractManager } from "../utils/contractUtils";
 
 function Vote() {
@@ -16,103 +15,114 @@ function Vote() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [debug, setDebug] = useState({});
+  
+    useEffect(() => {
+      async function fetchData() {
+        try {
+          setDebug((prev) => ({ ...prev, stage: "Fetching election" }));
+  
+          // Fetch election details
+          console.log("Fetching election with ID:", electionId);
+          const electionData = await getElection(electionId);
+          console.log("Election data:", electionData);
+          setDebug((prev) => ({ ...prev, electionData }));
+  
+          if (!electionData) {
+            setError(`Election with ID ${electionId} not found`);
+            setLoading(false);
+            return;
+          }
+  
+          // Format the election data for the UI
+          const formattedElection = {
+            id: electionData.id,
+            title: electionData.name,
+            description: electionData.description,
+            votingStartDate: electionData.votingStart,
+            nominationEndDate: electionData.nominationEnd,
+            endDate: electionData.votingEnd,
+            state: electionData.state,
+          };
+  
+          setElection(formattedElection);
+  
+          // Check if election is in voting phase using contract's canVote function
+          if (account) {
+            console.log("Checking if user can vote");
+            const { canVote: isEligible, message } = await contractManager.canUserVote(
+              electionId,
+              account
+            );
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setDebug((prev) => ({ ...prev, stage: "Fetching election" }));
-
-        // Fetch election details
-        const electionData = await getElection(electionId);
-        setDebug((prev) => ({ ...prev, electionData }));
-
-        if (!electionData) {
-          setError(`Election with ID ${electionId} not found`);
+            if (!isEligible) {
+              setError(message);
+            }
+            console.log("User can vote:", isEligible);
+          }
+  
+          // Fetch candidates
+          const candidateData = await getCandidates(electionId);
+          setCandidates(candidateData);
+  
+          // Check if user has already voted
+          if (account) {
+            const hasVoted = await contractManager.hasUserVoted(electionId, account);
+            setAlreadyVoted(hasVoted);
+          }
+        } catch (err) {
+          console.error("Vote page error:", err);
+          setError("Failed to load election details: " + err.message);
+          setDebug((prev) => ({ ...prev, error: err.message }));
+        } finally {
           setLoading(false);
-          return;
         }
-
-        // Format the election data for the UI
-        const formattedElection = {
-          id: electionData.id,
-          title: electionData.name,
-          description: electionData.description,
-          votingStartDate: electionData.votingStart,
-          nominationEndDate: electionData.nominationEnd,
-          endDate: electionData.votingEnd,
-          state: electionData.state,
-        };
-
-        setElection(formattedElection);
-
-        // Check if election is in voting phase
-        const now = new Date();
-        const votingStart = new Date(electionData.votingStart);
-        const votingEnd = new Date(electionData.votingEnd);
-
-        if (now < votingStart) {
-          setError("Voting has not started yet for this election");
-        } else if (now > votingEnd) {
-          setError("Voting has ended for this election");
+      }
+  
+      fetchData();
+    }, [electionId, account, getElection, getCandidates]);
+  
+    const handleVote = async () => {
+      if (!selectedCandidate) {
+        setError("Please select a candidate");
+        return;
+      }
+  
+      setSubmitting(true);
+      setError("");
+      setSuccess("");
+  
+      try {
+        // Check voting eligibility before casting vote
+        console.log("Checking if user can vote before casting vote11111");
+        const isEligible = await contractManager.canUserVote(
+          electionId,
+          account
+        );
+  
+        if (!isEligible) {
+          throw new Error(`Voting not allowed: ${isEligible.message}`);
         }
-
-        setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
-
-        // Fetch candidates
-        const candidateData = await getCandidates(electionId);
-        setCandidates(candidateData);
-
-        // Check if user has already voted for this election
-        if (account) {
-          const hasVoted = await contractManager.hasUserVoted(
-            electionId,
-            account,
-          );
-          setAlreadyVoted(hasVoted);
+  
+        // Extract the candidate ID and cast vote
+        const candidateId = candidates.find(
+          (c) => c.address === selectedCandidate
+        )?.id;
+  
+        if (!candidateId) {
+          throw new Error("Invalid candidate selection");
         }
+  
+        console.log("Casting vote for candidate:", selectedCandidate);
+        await contractManager.castVote(electionId, candidateId);
+        setSuccess("Your vote has been recorded successfully!");
+        setAlreadyVoted(true);
       } catch (err) {
-        console.error("Vote page error:", err);
-        setError("Failed to load election details: " + err.message);
-        setDebug((prev) => ({ ...prev, error: err.message }));
+        setError("Failed to cast vote: " + err.message);
+        console.error(err);
       } finally {
-        setLoading(false);
+        setSubmitting(false);
       }
-    }
-
-    fetchData();
-  }, [electionId, account, getElection, getCandidates]);
-
-  const handleVote = async () => {
-    if (!selectedCandidate) {
-      setError("Please select a candidate");
-      return;
-    }
-
-    setSubmitting(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      // Extract the candidate ID from the selected candidate
-      const candidateId = candidates.find(
-        (c) => c.address === selectedCandidate,
-      )?.id;
-
-      if (!candidateId) {
-        throw new Error("Invalid candidate selection");
-      }
-
-      // Cast vote by candidate ID
-      await castVote(electionId, candidateId);
-      setSuccess("Your vote has been recorded successfully!");
-      setAlreadyVoted(true);
-    } catch (err) {
-      setError("Failed to cast vote: " + err.message);
-      console.error(err);
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    };
 
   if (loading) {
     return (

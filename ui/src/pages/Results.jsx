@@ -1,3 +1,4 @@
+import { ethers } from "ethers";
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useVoting } from "../contexts/useVoting";
@@ -11,6 +12,30 @@ function Results() {
   const [error, setError] = useState("");
   const [debug, setDebug] = useState({});
 
+  
+    // Add this helper function at the top of the fileconst formatVoteCount = (count) => {
+      const formatVoteCount = (count) => {
+        if (!count) return "0";
+        // Convert BigInt to string before formatting
+        const tokens = ethers.formatEther(count.toString());
+        return Number(tokens).toLocaleString('en-US', {
+          maximumFractionDigits: 0
+        });
+      };
+      
+      const calculatePercentage = (count, total) => {
+        if (!total || total === BigInt(0)) return 0;
+        try {
+          // Convert to BigInt for calculation
+          const countBig = BigInt(count.toString());
+          const totalBig = BigInt(total.toString());
+          // Multiply by 100 first to maintain precision
+          return Number((countBig * BigInt(100)) / totalBig);
+        } catch (err) {
+          console.error("Error calculating percentage:", err);
+          return 0;
+        }
+      };
   useEffect(() => {
     async function fetchData() {
       try {
@@ -57,6 +82,7 @@ function Results() {
       }
     }
 
+
     fetchData();
   }, [electionId, getElection, getCandidates]);
 
@@ -95,8 +121,8 @@ function Results() {
 
   // Calculate total votes
   const totalVotes = candidates.reduce(
-    (sum, candidate) => sum + candidate.voteCount,
-    0,
+    (sum, candidate) => sum + BigInt(candidate.voteCount),
+    BigInt(0)
   );
 
   // Calculate if election is completed
@@ -132,7 +158,7 @@ function Results() {
             {new Date(election.endDate).toLocaleString()}
           </div>
           <div>
-            <span className="font-medium">Total Votes Cast:</span> {totalVotes}
+            <span className="font-medium">Total Votes Cast:</span> {formatVoteCount(totalVotes)}
           </div>
         </div>
 
@@ -167,22 +193,17 @@ function Results() {
                   {candidates[0].name}
                 </p>
                 <p className="text-green-600">
-                  {candidates[0].voteCount} votes (
-                  {totalVotes > 0
-                    ? Math.round((candidates[0].voteCount / totalVotes) * 100)
-                    : 0}
-                  %)
+                  {formatVoteCount(candidates[0].voteCount)} votes (
+                  {calculatePercentage(candidates[0].voteCount, totalVotes)}%)
                 </p>
               </div>
             )}
 
             {/* All candidates with vote bars */}
             <div className="space-y-6">
-              {candidates.map((candidate, index) => {
-                const percentage =
-                  totalVotes > 0
-                    ? Math.round((candidate.voteCount / totalVotes) * 100)
-                    : 0;
+            {candidates.map((candidate, index) => {
+              const voteCount = BigInt(candidate.voteCount);
+              const percentage = calculatePercentage(voteCount, totalVotes);
 
                 return (
                   <div key={index} className="border rounded-lg p-4">
@@ -191,7 +212,7 @@ function Results() {
                         {candidate.name}
                       </h3>
                       <div className="text-gray-700 font-medium">
-                        {candidate.voteCount} votes ({percentage}%)
+                        {formatVoteCount(voteCount)} votes ({percentage}%)
                       </div>
                     </div>
 

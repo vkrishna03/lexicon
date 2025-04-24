@@ -168,20 +168,53 @@ class ContractManager {
 
   async castVote(electionId, candidateId) {
     try {
-      // First approve token spending
-      const votingPower = await this.votingSystem.getVotingPower(
-        this.currentWallet.address,
-      );
-      await this.votingToken.approve(this.votingSystem.address, votingPower);
+      console.log("Casting vote for candidate", candidateId, "in election", electionId);
+      
+      // First check if contracts are initialized
+      if (!this.votingToken || !this.votingSystem || !this.currentWallet) {
+        throw new Error("Contracts or wallet not initialized");
+      }
 
-      const tx = await this.votingSystem.castVote(electionId, candidateId);
-      const receipt = await tx.wait();
+      // Get voting power
+      const votingPower = await this.votingSystem.getVotingPower(
+        this.currentWallet.address
+      );
+      console.log("Voting power:", votingPower.toString());
+
+      // Approve token spending
+      const approveTx = await this.votingToken.approve(
+        this.votingSystem.target,
+        votingPower
+      );
+      console.log("Approval transaction sent:", approveTx.hash);
+      await approveTx.wait();
+      console.log("Token approval confirmed");
+      // Cast vote
+      const voteTx = await this.votingSystem.castVote(
+        electionId, 
+        candidateId
+      );
+      console.log("Vote transaction sent:", voteTx.hash);
+      const receipt = await voteTx.wait();
+      console.log("Vote transaction confirmed:", receipt);
+
       return receipt;
     } catch (error) {
-      console.error("Error casting vote:", error);
+      console.error("Error in castVote:", error);
+      // Add more context to the error
+      if (!this.votingToken) {
+        throw new Error("VotingToken contract not initialized");
+      }
+      if (!this.votingSystem) {
+        throw new Error("VotingSystem contract not initialized");
+      }
+      if (!this.currentWallet) {
+        throw new Error("Wallet not connected");
+      }
       throw error;
     }
   }
+
 
   // View Functions
   async getElectionDetails(electionId) {
@@ -276,7 +309,7 @@ class ContractManager {
 
   async hasUserVoted(electionId, address) {
     try {
-      return await this.votingSystem.hasUserVoted(electionId, address);
+      const hasVoted = await this.votingSystem.hasUserVoted(electionId, address);
     } catch (error) {
       console.error("Error checking if user voted:", error);
       throw error;

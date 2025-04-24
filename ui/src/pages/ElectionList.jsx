@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useVoting } from "../contexts/useVoting";
 
@@ -24,9 +24,26 @@ function ElectionList() {
     }
   }, [getElections]);
 
+  // Add this helper function at the top of your file, outside the component
+const isInNominationPhase = (election) => {
+  const now = new Date().getTime();
+  const nominationStart = new Date(election.startDate).getTime();
+  const nominationEnd = new Date(election.nominationEndDate).getTime();
+  return now >= nominationStart && now <= nominationEnd;
+};
+
+// Add this helper function for voting phase
+const isInVotingPhase = (election) => {
+  const now = new Date().getTime();
+  const votingStart = new Date(election.votingStartDate).getTime();
+  const votingEnd = new Date(election.endDate).getTime();
+  return now >= votingStart && now <= votingEnd;
+};
+
   useEffect(() => {
     fetchElections();
   }, [fetchElections]);
+
 
   if (loading) {
     return (
@@ -107,7 +124,7 @@ function ElectionList() {
               </div>
 
               <div className="mt-6 flex flex-wrap gap-2">
-                {election.timeStatus.phase.includes("Nomination") && (
+                {isInNominationPhase(election)&& (
                   <Link
                     to={`/nominate/${election.id}`}
                     className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded"
@@ -115,7 +132,7 @@ function ElectionList() {
                     Nominate
                   </Link>
                 )}
-                {election.timeStatus.phase.includes("Voting") && (
+                {isInVotingPhase(election) && (
                   <Link
                     to={`/vote/${election.id}`}
                     className="bg-purple-500 hover:bg-purple-600 text-white text-sm font-bold py-2 px-3 rounded"
