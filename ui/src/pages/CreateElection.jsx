@@ -4,18 +4,27 @@ import { useVoting } from "../contexts/useVoting";
 
 function CreateElection() {
   const { account, createElection } = useVoting();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+
+  const getFutureDate = (daysFromNow) => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysFromNow);
+    // Format to YYYY-MM-DDThh:mm
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+  };
 
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    nominationStart: "",
-    nominationEnd: "",
-    votingStart: "",
-    votingEnd: "",
+    nominationStart: getFutureDate(0),
+    nominationEnd: getFutureDate(2),
+    votingStart: getFutureDate(3),
+    votingEnd: getFutureDate(5),
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { name, value } = e.target;

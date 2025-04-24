@@ -163,7 +163,11 @@ export function VotingProvider({ children }) {
             electionData.votingEnd,
           );
 
-          await loadElectionData();
+          console.log("Election created:", result);
+
+          setTimeout(async () => {
+            await loadElectionData();
+          }, 2000);
           return result;
         } catch (error) {
           updateState({ error: "Failed to create election" });

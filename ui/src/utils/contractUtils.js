@@ -108,19 +108,42 @@ class ContractManager {
     votingEnd,
   ) {
     try {
+      // Convert date strings to Unix timestamps (seconds)
+
+      const nominationStartTime = Math.floor(
+        new Date(nominationStart).getTime() / 1000,
+      );
+      const nominationEndTime = Math.floor(
+        new Date(nominationEnd).getTime() / 1000,
+      );
+      const votingStartTime = Math.floor(
+        new Date(votingStart).getTime() / 1000,
+      );
+      const votingEndTime = Math.floor(new Date(votingEnd).getTime() / 1000);
+
+      console.log("Creating election with dates (seconds since epoch):", {
+        nominationStartTime,
+        nominationEndTime,
+        votingStartTime,
+        votingEndTime,
+      });
+
       const tx = await this.votingSystem.createElection(
         name,
         description,
-        nominationStart,
-        nominationEnd,
-        votingStart,
-        votingEnd,
+        nominationStartTime,
+        nominationEndTime,
+        votingStartTime,
+        votingEndTime,
       );
+
+      console.log("Transaction sent:", tx.hash);
+
       const receipt = await tx.wait();
-      const event = receipt.events.find((e) => e.event === "ElectionCreated");
+      console.log("Transaction receipt:", receipt);
       return {
-        electionId: event.args.electionId.toString(),
-        timestamp: event.args.timestamp.toString(),
+        transactionHash: tx.hash,
+        success: true,
       };
     } catch (error) {
       console.error("Error creating election:", error);
@@ -164,14 +187,34 @@ class ContractManager {
   async getElectionDetails(electionId) {
     try {
       const details = await this.votingSystem.getElectionDetails(electionId);
+
+      console.log("Raw timestamp values:", {
+        nominationStart: details[2],
+        nominationEnd: details[3],
+        votingStart: details[4],
+        votingEnd: details[5],
+      });
+
+      const convertTimestamp = (timestamp) => {
+        const num = Number(timestamp);
+        // If the timestamp is very large (represents a date past year 3000),
+        // it's likely already in milliseconds
+        if (num > 32503680000) {
+          // Jan 1, 3000 in seconds since epoch
+          return new Date(num);
+        }
+        // Otherwise, assume it's in seconds and convert to milliseconds
+        return new Date(num * 1000);
+      };
+
       return {
         name: details[0],
         description: details[1],
-        nominationStart: new Date(details[2].toNumber() * 1000),
-        nominationEnd: new Date(details[3].toNumber() * 1000),
-        votingStart: new Date(details[4].toNumber() * 1000),
-        votingEnd: new Date(details[5].toNumber() * 1000),
-        state: details[6],
+        nominationStart: new Date(Number(details[2]) * 1000),
+        nominationEnd: convertTimestamp(details[3]),
+        votingStart: convertTimestamp(details[4]),
+        votingEnd: convertTimestamp(details[5]),
+        state: details[6].toString(),
         totalVotes: details[7].toString(),
       };
     } catch (error) {
@@ -210,7 +253,7 @@ class ContractManager {
     try {
       const status = await this.votingSystem.getElectionTimeStatus(electionId);
       return {
-        state: status[0],
+        state: Number(status[0]),
         timeUntilNext: status[1].toString(),
         phase: status[2],
       };
@@ -281,7 +324,7 @@ class ContractManager {
     try {
       const tx = await this.votingToken.approve(
         spender,
-        ethers.utils.parseEther(amount),
+        ethers.parseEther(amount),
       );
       return await tx.wait();
     } catch (error) {

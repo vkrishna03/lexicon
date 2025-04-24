@@ -96,13 +96,13 @@ function ElectionList() {
                 </p>
                 <p>
                   <span className="font-medium">Nomination:</span>{" "}
-                  {new Date(election.startDate * 1000).toLocaleString()} -{" "}
-                  {new Date(election.nominationEndDate * 1000).toLocaleString()}
+                  {new Date(election.startDate).toLocaleString()} -{" "}
+                  {new Date(election.nominationEndDate).toLocaleString()}
                 </p>
                 <p>
                   <span className="font-medium">Voting:</span>{" "}
-                  {new Date(election.votingStartDate * 1000).toLocaleString()} -{" "}
-                  {new Date(election.endDate * 1000).toLocaleString()}
+                  {new Date(election.votingStartDate).toLocaleString()} -{" "}
+                  {new Date(election.endDate).toLocaleString()}
                 </p>
               </div>
 
