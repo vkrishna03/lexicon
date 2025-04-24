@@ -1,15 +1,17 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { useWeb3 } from "../contexts/Web3Context";
-import { createElection } from "../services/blockchainService";
+import { useVoting } from "../contexts/useVoting";
 
 function CreateElection() {
-  const { contracts, account } = useWeb3();
+  const { account, createElection } = useVoting();
+
   const [formData, setFormData] = useState({
-    title: "",
+    name: "",
     description: "",
-    startDate: "",
-    endDate: "",
+    nominationStart: "",
+    nominationEnd: "",
+    votingStart: "",
+    votingEnd: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -22,26 +24,36 @@ function CreateElection() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!contracts || !contracts.tokenVoting) {
-      setError("Please connect your wallet");
-      return;
-    }
 
     setLoading(true);
     setError("");
 
     // Validate dates
-    const start = new Date(formData.startDate);
-    const end = new Date(formData.endDate);
+    const nominationStart = new Date(formData.nominationStart);
+    const nominationEnd = new Date(formData.nominationEnd);
+    const votingStart = new Date(formData.votingStart);
+    const votingEnd = new Date(formData.votingEnd);
 
-    if (end <= start) {
-      setError("End date must be after start date");
+    if (nominationEnd <= nominationStart) {
+      setError("Nomination end date must be after nomination start date");
+      setLoading(false);
+      return;
+    }
+
+    if (votingStart <= nominationEnd) {
+      setError("Voting start date must be after nomination end date");
+      setLoading(false);
+      return;
+    }
+
+    if (votingEnd <= votingStart) {
+      setError("Voting end date must be after voting start date");
       setLoading(false);
       return;
     }
 
     try {
-      await createElection(contracts.tokenVoting, formData);
+      await createElection(formData);
       navigate("/elections");
     } catch (err) {
       setError("Failed to create election: " + err.message);
@@ -77,14 +89,14 @@ function CreateElection() {
 
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label className="block text-gray-700 font-bold mb-2" htmlFor="title">
-            Election Title
+          <label className="block text-gray-700 font-bold mb-2" htmlFor="name">
+            Election Name
           </label>
           <input
             type="text"
-            id="title"
-            name="title"
-            value={formData.title}
+            id="name"
+            name="name"
+            value={formData.name}
             onChange={handleChange}
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             required
@@ -112,15 +124,15 @@ function CreateElection() {
           <div>
             <label
               className="block text-gray-700 font-bold mb-2"
-              htmlFor="startDate"
+              htmlFor="nominationStart"
             >
-              Start Date
+              Nomination Start Date
             </label>
             <input
               type="datetime-local"
-              id="startDate"
-              name="startDate"
-              value={formData.startDate}
+              id="nominationStart"
+              name="nominationStart"
+              value={formData.nominationStart}
               onChange={handleChange}
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               required
@@ -130,15 +142,53 @@ function CreateElection() {
           <div>
             <label
               className="block text-gray-700 font-bold mb-2"
-              htmlFor="endDate"
+              htmlFor="nominationEnd"
             >
-              End Date
+              Nomination End Date
             </label>
             <input
               type="datetime-local"
-              id="endDate"
-              name="endDate"
-              value={formData.endDate}
+              id="nominationEnd"
+              name="nominationEnd"
+              value={formData.nominationEnd}
+              onChange={handleChange}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label
+              className="block text-gray-700 font-bold mb-2"
+              htmlFor="votingStart"
+            >
+              Voting Start Date
+            </label>
+            <input
+              type="datetime-local"
+              id="votingStart"
+              name="votingStart"
+              value={formData.votingStart}
+              onChange={handleChange}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              required
+            />
+          </div>
+
+          <div>
+            <label
+              className="block text-gray-700 font-bold mb-2"
+              htmlFor="votingEnd"
+            >
+              Voting End Date
+            </label>
+            <input
+              type="datetime-local"
+              id="votingEnd"
+              name="votingEnd"
+              value={formData.votingEnd}
               onChange={handleChange}
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               required

@@ -1,52 +1,99 @@
 import { ethers } from "ethers";
-import contractAddresses from "../contractAddresses.json";
 import VotingSystemABI from "../../../blockchain/artifacts/contracts/VotingSystem.sol/VotingSystem.json";
 import VotingTokenABI from "../../../blockchain/artifacts/contracts/VotingToken.sol/VotingToken.json";
+import deployedAddresses from "../../../blockchain/deployment/addresses.json";
 
 class ContractManager {
   constructor() {
     this.provider = new ethers.JsonRpcProvider("http://localhost:8545");
-    this.loadContracts();
     this.currentWallet = null;
+    this.votingSystem = null;
+    this.votingToken = null;
+    this.initialize();
+  }
+
+  async initialize() {
+    try {
+      await this.loadContracts();
+      await this.autoConnectWallet();
+    } catch (error) {
+      console.error("Error during initialization:", error);
+    }
   }
 
   async loadContracts() {
     try {
+      // Load addresses from deployment file
       this.votingSystem = new ethers.Contract(
-        contractAddresses.votingSystem,
+        deployedAddresses.votingSystem,
         VotingSystemABI.abi,
-        this.provider,
+        this.provider
       );
 
       this.votingToken = new ethers.Contract(
-        contractAddresses.votingToken,
+        deployedAddresses.votingToken,
         VotingTokenABI.abi,
-        this.provider,
+        this.provider
       );
 
-      console.log("Contracts loaded successfully");
+      console.log("Contracts loaded automatically from deployment");
     } catch (error) {
-      console.error("Error loading contracts:", error);
+      console.error("Error loading contracts from deployment:", error);
       throw error;
     }
   }
 
-  async connectWallet() {
+  async autoConnectWallet() {
     try {
-      // For development, use a random wallet
-      const wallet = ethers.Wallet.createRandom();
-      this.currentWallet = wallet.connect(this.provider);
+      const accounts = await this.provider.listAccounts();
+      
+      if (accounts.length === 0) {
+        throw new Error("No accounts available. Is Hardhat running?");
+      }
 
-      // Connect contracts to wallet
-      this.votingSystem = this.votingSystem.connect(this.currentWallet);
-      this.votingToken = this.votingToken.connect(this.currentWallet);
+      // Use the first account by default
+      const account = accounts[0];
+      this.currentWallet = await this.provider.getSigner(account.address);
+
+      // Connect contracts to the signer
+      if (this.votingSystem && this.votingToken) {
+        this.votingSystem = this.votingSystem.connect(this.currentWallet);
+        this.votingToken = this.votingToken.connect(this.currentWallet);
+      }
 
       return {
-        address: this.currentWallet.address,
-        privateKey: this.currentWallet.privateKey,
+        address: account.address,
+        index: 0
       };
     } catch (error) {
-      console.error("Error connecting wallet:", error);
+      console.error("Error in auto wallet connection:", error);
+      throw error;
+    }
+  }
+
+  async switchAccount(accountIndex) {
+    try {
+      const accounts = await this.provider.listAccounts();
+      
+      if (accountIndex >= accounts.length) {
+        throw new Error("Account index out of range");
+      }
+
+      const account = accounts[accountIndex];
+      this.currentWallet = await this.provider.getSigner(account.address);
+
+      // Reconnect contracts with the new signer
+      if (this.votingSystem && this.votingToken) {
+        this.votingSystem = this.votingSystem.connect(this.currentWallet);
+        this.votingToken = this.votingToken.connect(this.currentWallet);
+      }
+
+      return {
+        address: account.address,
+        index: accountIndex
+      };
+    } catch (error) {
+      console.error("Error switching account:", error);
       throw error;
     }
   }
@@ -177,7 +224,7 @@ class ContractManager {
   async getVotingPower(address) {
     try {
       const power = await this.votingSystem.getVotingPower(address);
-      return ethers.utils.formatEther(power);
+      return ethers.formatEther(power);
     } catch (error) {
       console.error("Error getting voting power:", error);
       throw error;
@@ -223,7 +270,7 @@ class ContractManager {
   async getTokenBalance(address) {
     try {
       const balance = await this.votingToken.balanceOf(address);
-      return ethers.utils.formatEther(balance);
+      return ethers.formatEther(balance);
     } catch (error) {
       console.error("Error getting token balance:", error);
       throw error;

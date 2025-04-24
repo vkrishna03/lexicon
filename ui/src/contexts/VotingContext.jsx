@@ -1,61 +1,36 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { contractManager } from "../utils/contractUtils";
-
-const VotingContext = createContext();
+import { VotingContext } from "./votingContextDefs";
 
 export function VotingProvider({ children }) {
-  // State management
+  const navigate = useNavigate();
+  
   const [state, setState] = useState({
-    loading: true,
+    loading: false,
     error: null,
+    account: null,
     wallet: null,
+    isConnected: false,
+    isConnecting: false,
     activeElections: [],
     upcomingElections: [],
     pastElections: [],
     userVotingPower: "0",
     userTokenBalance: "0",
-    userNominations: [],
-    userVotes: [],
   });
 
-  // Helper function to update state
-  const updateState = (newState) => {
-    setState((prevState) => ({ ...prevState, ...newState }));
-  };
-
-  // Initialize system
-  useEffect(() => {
-    initializeSystem();
+  const updateState = useCallback((newState) => {
+    setState((prev) => ({ ...prev, ...newState }));
   }, []);
 
-  // Load data when wallet changes
-  useEffect(() => {
-    if (state.wallet) {
-      loadUserData();
-      loadElectionData();
-    }
-  }, [state.wallet]);
-
-  // Core initialization function
-  const initializeSystem = async () => {
-    try {
-      updateState({ loading: true, error: null });
-      const walletInfo = await contractManager.connectWallet();
-      updateState({ wallet: walletInfo });
-    } catch (error) {
-      updateState({ error: "Failed to initialize system" });
-      console.error("Initialization error:", error);
-    } finally {
-      updateState({ loading: false });
-    }
-  };
-
-  // Data loading handlers
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async (address) => {
+    if (!address) return;
+    
     try {
       const [balance, votingPower] = await Promise.all([
-        contractManager.getTokenBalance(state.wallet.address),
-        contractManager.getVotingPower(state.wallet.address),
+        contractManager.getTokenBalance(address),
+        contractManager.getVotingPower(address),
       ]);
 
       updateState({
@@ -65,6 +40,62 @@ export function VotingProvider({ children }) {
     } catch (error) {
       console.error("Error loading user data:", error);
     }
+  }, [updateState]);
+
+  const checkConnection = useCallback(async () => {
+    try {
+      // ContractManager now handles initialization automatically
+      const walletInfo = await contractManager.autoConnectWallet();
+      
+      if (walletInfo?.address) {
+        updateState({
+          account: walletInfo.address,
+          wallet: walletInfo,
+          isConnected: true,
+        });
+        await loadUserData(walletInfo.address);
+      }
+    } catch (error) {
+      console.error("Connection check failed:", error);
+    }
+  }, [updateState, loadUserData]);
+
+  useEffect(() => {
+    checkConnection();
+  }, [checkConnection]);
+
+  const switchAccount = async (index) => {
+    try {
+      updateState({ isConnecting: true, error: null });
+      
+      const account = await contractManager.switchAccount(index);
+      
+      updateState({
+        account: account.address,
+        wallet: account,
+        isConnected: true,
+        isConnecting: false,
+      });
+
+      await loadUserData(account.address);
+    } catch (error) {
+      updateState({
+        error: error.message,
+        isConnecting: false,
+      });
+      throw error;
+    }
+  };
+
+  const disconnectWallet = () => {
+    updateState({
+      account: null,
+      wallet: null,
+      isConnected: false,
+      userVotingPower: "0",
+      userTokenBalance: "0",
+    });
+    navigate("/");
   };
 
   const loadElectionData = async () => {
@@ -98,7 +129,6 @@ export function VotingProvider({ children }) {
     }
   };
 
-  // Election Management Handlers
   const electionHandlers = {
     createElection: async (electionData) => {
       try {
@@ -166,7 +196,7 @@ export function VotingProvider({ children }) {
 
         await contractManager.castVote(electionId, candidateId);
 
-        await Promise.all([loadElectionData(), loadUserData()]);
+        await Promise.all([loadElectionData(), loadUserData(state.wallet.address)]);
       } catch (error) {
         updateState({ error: "Voting failed" });
         throw error;
@@ -176,7 +206,6 @@ export function VotingProvider({ children }) {
     },
   };
 
-  // Query Handlers
   const queryHandlers = {
     getElection: async (electionId) => {
       try {
@@ -209,10 +238,9 @@ export function VotingProvider({ children }) {
     },
   };
 
-  // Utility Handlers
   const utilityHandlers = {
     refreshData: async () => {
-      await Promise.all([loadUserData(), loadElectionData()]);
+      await Promise.all([loadUserData(state.wallet.address), loadElectionData()]);
     },
 
     formatElectionTimes: (election) => {
@@ -226,18 +254,12 @@ export function VotingProvider({ children }) {
     },
   };
 
-  // Context value
   const value = {
-    // State
     ...state,
-
-    // Election handlers
+    switchAccount,
+    disconnectWallet,
     ...electionHandlers,
-
-    // Query handlers
     ...queryHandlers,
-
-    // Utility handlers
     ...utilityHandlers,
   };
 
@@ -245,23 +267,3 @@ export function VotingProvider({ children }) {
     <VotingContext.Provider value={value}>{children}</VotingContext.Provider>
   );
 }
-
-// Custom hook to use the voting context
-export function useVoting() {
-  const context = useContext(VotingContext);
-  if (!context) {
-    throw new Error("useVoting must be used within a VotingProvider");
-  }
-  return context;
-}
-
-// Action types for specific operations
-export const VotingActions = {
-  CREATE_ELECTION: "CREATE_ELECTION",
-  NOMINATE_CANDIDATE: "NOMINATE_CANDIDATE",
-  CAST_VOTE: "CAST_VOTE",
-  UPDATE_USER_DATA: "UPDATE_USER_DATA",
-  UPDATE_ELECTION_DATA: "UPDATE_ELECTION_DATA",
-  SET_ERROR: "SET_ERROR",
-  SET_LOADING: "SET_LOADING",
-};

@@ -1,83 +1,28 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useWeb3 } from "../contexts/Web3Context";
-import { getElections } from "../services/blockchainService";
+import { useVoting } from "../contexts/useVoting";
 
 function ElectionList() {
-  const { contracts, account } = useWeb3();
+  const { getElections } = useVoting();
   const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [debugging, setDebugging] = useState({});
+  const [debug] = useState({});
 
   useEffect(() => {
     async function fetchElections() {
-      if (!account) {
-        setError("Please connect your wallet to view elections");
-        setLoading(false);
-        return;
-      }
-
-      if (!contracts || !contracts.tokenVoting) {
-        setError("Contract not initialized. Please go to Setup page first.");
-        setLoading(false);
-        return;
-      }
-
       try {
-        console.log("Fetching elections from blockchain...");
-        setDebugging((prev) => ({ ...prev, status: "Fetching elections" }));
-
-        // Try to get election count for debugging
-        try {
-          const countBN = await contracts.tokenVoting.electionCount();
-          const count = parseInt(countBN.toString());
-          console.log("Election count:", count);
-          setDebugging((prev) => ({ ...prev, electionCount: count }));
-
-          if (count === 0) {
-            setElections([]);
-            setLoading(false);
-            return;
-          }
-        } catch (countError) {
-          console.error("Error getting election count:", countError);
-          setDebugging((prev) => ({ ...prev, countError: countError.message }));
-          setError("Error getting election count: " + countError.message);
-          setLoading(false);
-          return;
-        }
-
-        // Get all elections
-        const electionData = await getElections(contracts.tokenVoting);
-        console.log("Fetched elections:", electionData);
-        setDebugging((prev) => ({ ...prev, electionData }));
+        setLoading(true);
+        const electionData = await getElections();
         setElections(electionData);
       } catch (err) {
-        console.error("Failed to load elections:", err);
-        setDebugging((prev) => ({ ...prev, error: err.message }));
         setError("Failed to load elections: " + err.message);
       } finally {
         setLoading(false);
       }
     }
-
     fetchElections();
-  }, [contracts, account]);
-
-  if (!account) {
-    return (
-      <div className="text-center py-10">
-        <p>Please connect your wallet to view elections</p>
-        <Link
-          to="/"
-          className="text-blue-500 hover:underline mt-4 inline-block"
-        >
-          Connect Wallet
-        </Link>
-      </div>
-    );
-  }
+  }, [getElections]);
 
   if (loading) {
     return (
@@ -87,11 +32,15 @@ function ElectionList() {
         <div className="mt-4 text-sm text-gray-500">
           <p>Debug info:</p>
           <pre className="text-xs text-left max-w-lg mx-auto overflow-auto bg-gray-100 p-2 rounded">
-            {JSON.stringify(debugging, null, 2)}
+            {JSON.stringify(debug, null, 2)}
           </pre>
         </div>
       </div>
     );
+  }
+
+  if (error) {
+    return <>error...</>;
   }
 
   return (
@@ -113,7 +62,7 @@ function ElectionList() {
           <div className="mt-2">
             <p className="text-sm">Debug info:</p>
             <pre className="text-xs overflow-auto bg-red-50 p-2 rounded mt-1">
-              {JSON.stringify(debugging, null, 2)}
+              {JSON.stringify(debug, null, 2)}
             </pre>
           </div>
         </div>

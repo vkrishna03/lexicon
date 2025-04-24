@@ -1,32 +1,40 @@
 import React from "react";
-import { useWeb3 } from "../contexts/Web3Context";
+import { useVoting } from "../contexts/useVoting";
 
-function AccountSelector() {
-  const { account, availableAccounts, switchAccount } = useWeb3();
+function AccountSelector({ onClose }) {
+  const { account, switchAccount, isConnecting } = useVoting();
 
-  const handleAccountChange = (e) => {
-    const accountIndex = parseInt(e.target.value);
-    switchAccount(accountIndex);
+  const handleAccountSwitch = async (index) => {
+    try {
+      await switchAccount(index);
+      onClose?.();
+    } catch (error) {
+      console.error("Failed to switch account:", error);
+    }
   };
 
-  if (!availableAccounts || availableAccounts.length === 0) {
-    return <div className="text-red-500">No accounts available</div>;
-  }
+  // Hardhat provides 20 accounts by default, but we'll show first 4 for simplicity
+  const accountCount = 4;
 
   return (
-    <div className="flex items-center gap-2">
-      <select
-        className="bg-gray-700 text-white rounded px-2 py-1 text-sm"
-        value={availableAccounts.findIndex((acc) => acc.address === account)}
-        onChange={handleAccountChange}
-      >
-        {availableAccounts.map((acc, index) => (
-          <option key={acc.address} value={index}>
-            Account {index}: {acc.address.substring(0, 6)}...
-            {acc.address.substring(acc.address.length - 4)}
-          </option>
+    <div className="w-64">
+      <h3 className="text-gray-700 font-medium mb-2">Switch Account</h3>
+      <div className="space-y-2">
+        {Array.from({ length: accountCount }).map((_, index) => (
+          <button
+            key={index}
+            onClick={() => handleAccountSwitch(index)}
+            disabled={isConnecting}
+            className={`w-full text-left px-3 py-2 rounded text-sm ${
+              account === `Account ${index}` 
+                ? "bg-blue-50 text-blue-700" 
+                : "hover:bg-gray-50"
+            }`}
+          >
+            Account {index + 1}
+          </button>
         ))}
-      </select>
+      </div>
     </div>
   );
 }

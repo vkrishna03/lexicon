@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getCandidates, getElection } from "../services/blockchainService";
-import { useWeb3 } from "../contexts/Web3Context";
+import { useVoting } from "../contexts/useVoting";
 
 function Results() {
-  const { contracts } = useWeb3();
+  const { getElection, getResults } = useVoting();
   const { electionId } = useParams();
   const [election, setElection] = useState(null);
   const [candidates, setCandidates] = useState([]);
@@ -15,19 +14,10 @@ function Results() {
   useEffect(() => {
     async function fetchData() {
       try {
-        if (!contracts || !contracts.tokenVoting) {
-          setError("Please connect your wallet and set up contracts first");
-          setLoading(false);
-          return;
-        }
-
         setDebug((prev) => ({ ...prev, stage: "Fetching election" }));
 
         // Fetch election details
-        const electionData = await getElection(
-          contracts.tokenVoting,
-          electionId,
-        );
+        const electionData = await getElection(electionId);
         setDebug((prev) => ({ ...prev, electionData }));
 
         if (!electionData) {
@@ -41,10 +31,7 @@ function Results() {
         setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
 
         // Fetch candidates with vote counts
-        const candidateData = await getCandidates(
-          contracts.tokenVoting,
-          electionId,
-        );
+        const candidateData = await getResults(electionId);
         setDebug((prev) => ({ ...prev, candidateData }));
 
         // Sort candidates by vote count in descending order
@@ -62,7 +49,7 @@ function Results() {
     }
 
     fetchData();
-  }, [electionId, contracts]);
+  }, [electionId, getElection, getResults]);
 
   if (loading) {
     return (

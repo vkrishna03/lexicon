@@ -1,15 +1,10 @@
-import React, { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { useWeb3 } from "../contexts/Web3Context";
-import {
-  castVote,
-  getCandidates,
-  getElection,
-  hasVoted,
-} from "../services/blockchainService";
+import React, { useState, useEffect } from "react";
+import { useParams, Link } from "react-router-dom";
+import { useVoting } from "../contexts/useVoting";
+import TransactionStatus from "../components/TransactionStatus";
 
 function Vote() {
-  const { account, contracts } = useWeb3();
+  const { account, getElection, getCandidates, vote } = useVoting();
   const { electionId } = useParams();
   const [election, setElection] = useState(null);
   const [candidates, setCandidates] = useState([]);
@@ -20,24 +15,14 @@ function Vote() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [debug, setDebug] = useState({});
-  const navigate = useNavigate();
 
   useEffect(() => {
     async function fetchData() {
       try {
-        if (!contracts || !contracts.tokenVoting) {
-          setError("Please connect your wallet and set up contracts first");
-          setLoading(false);
-          return;
-        }
-
         setDebug((prev) => ({ ...prev, stage: "Fetching election" }));
 
         // Fetch election details
-        const electionData = await getElection(
-          contracts.tokenVoting,
-          electionId,
-        );
+        const electionData = await getElection(electionId);
         setDebug((prev) => ({ ...prev, electionData }));
 
         if (!electionData) {
@@ -50,43 +35,21 @@ function Vote() {
 
         // Check if election is in voting phase
         const now = new Date();
-        const nominationEnd = new Date(electionData.nominationEndDate);
-        const electionEnd = new Date(electionData.endDate);
+        const votingStart = new Date(electionData.votingStartDate);
+        const votingEnd = new Date(electionData.endDate);
 
-        if (now < nominationEnd) {
-          setError(
-            "Voting has not started yet. Election is still in nomination phase.",
-          );
-        } else if (now > electionEnd) {
-          setError("Voting period has ended for this election");
+        if (now < votingStart) {
+          setError("Voting has not started yet for this election");
+        } else if (now > votingEnd) {
+          setError("Voting has ended for this election");
         }
 
         setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
 
         // Fetch candidates
-        const candidateData = await getCandidates(
-          contracts.tokenVoting,
-          electionId,
-        );
+        const candidateData = await getCandidates(electionId);
         setDebug((prev) => ({ ...prev, candidateData }));
         setCandidates(candidateData);
-
-        if (account) {
-          setDebug((prev) => ({ ...prev, stage: "Checking voting status" }));
-          // Check if user has already voted
-          try {
-            const votedStatus = await hasVoted(
-              contracts.tokenVoting,
-              electionId,
-              account,
-            );
-            setDebug((prev) => ({ ...prev, votedStatus }));
-            setAlreadyVoted(votedStatus);
-          } catch (votedErr) {
-            console.warn("Error checking voted status:", votedErr);
-            setDebug((prev) => ({ ...prev, votedError: votedErr.message }));
-          }
-        }
       } catch (err) {
         console.error("Vote page error:", err);
         setError("Failed to load election details: " + err.message);
@@ -97,7 +60,7 @@ function Vote() {
     }
 
     fetchData();
-  }, [electionId, contracts, account]);
+  }, [electionId, account, getElection, getCandidates]);
 
   const handleVote = async () => {
     if (!selectedCandidate) {
@@ -110,10 +73,6 @@ function Vote() {
     setSuccess("");
 
     try {
-      if (!contracts || !contracts.tokenVoting) {
-        throw new Error("Contracts not initialized");
-      }
-
       // Extract the candidate ID from the selected candidate
       const candidateId = candidates.find(
         (c) => c.address === selectedCandidate,
@@ -124,7 +83,7 @@ function Vote() {
       }
 
       // Cast vote by candidate ID
-      await castVote(contracts.tokenVoting, electionId, candidateId);
+      await vote.castVote(electionId, candidateId);
       setSuccess("Your vote has been recorded successfully!");
       setAlreadyVoted(true);
     } catch (err) {
@@ -167,6 +126,7 @@ function Vote() {
       </div>
     );
   }
+
   const now = new Date();
   const nominationEnd = new Date(election.nominationEndDate);
   const electionEnd = new Date(election.endDate);
@@ -220,7 +180,7 @@ function Vote() {
         </div>
       )}
 
-      {isVotingActive && !alreadyVoted ? (
+      {isVotingActive && !alreadyVoted && (
         <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
           <h2 className="text-xl font-bold mb-4">Cast Your Vote</h2>
 
@@ -229,7 +189,7 @@ function Vote() {
               No candidates are available for this election.
             </p>
           ) : (
-            <>
+            <div>
               <div className="mb-6">
                 <p className="mb-2 font-medium">Select a candidate:</p>
                 {candidates.map((candidate, index) => (
@@ -264,19 +224,22 @@ function Vote() {
               >
                 {submitting ? "Casting Vote..." : "Cast Vote"}
               </button>
-            </>
+            </div>
           )}
         </div>
-      ) : isVotingActive && alreadyVoted ? (
+      )}
+
+      {isVotingActive && alreadyVoted && (
         <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
           <h2 className="text-xl font-bold mb-4">You Have Voted</h2>
-          // src/pages/Vote.js (continued)
           <p className="text-gray-600">
             You have already cast your vote for this election. You can view the
             results using the link above.
           </p>
         </div>
-      ) : (
+      )}
+
+      {!isVotingActive && (
         <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
           <h2 className="text-xl font-bold mb-4">Voting Unavailable</h2>
           <p className="text-gray-600">

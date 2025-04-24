@@ -1,14 +1,9 @@
-import React, { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { useWeb3 } from "../contexts/Web3Context";
-import {
-  getCandidates,
-  getElection,
-  nominateCandidate,
-} from "../services/blockchainService";
+import React, { useState, useEffect, useCallback } from "react";
+import { Link, useParams } from "react-router-dom";
+import { useVoting } from "../contexts/useVoting";
 
 function Nominate() {
-  const { account, contracts } = useWeb3();
+  const { account, getElection, nominateCandidate, getAllCandidates } = useVoting();
   const { electionId } = useParams();
   const [election, setElection] = useState(null);
   const [candidates, setCandidates] = useState([]);
@@ -20,24 +15,26 @@ function Nominate() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [debug, setDebug] = useState({});
-  const navigate = useNavigate();
+
+  const loadCandidates = useCallback(async () => {
+    try {
+      setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
+      const candidateData = await getAllCandidates(electionId);
+      setDebug((prev) => ({ ...prev, candidateData }));
+      setCandidates(candidateData);
+    } catch (err) {
+      console.error("Error loading candidates:", err);
+      setDebug((prev) => ({ ...prev, candidateError: err.message }));
+    }
+  }, [electionId, getAllCandidates]);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        if (!contracts || !contracts.tokenVoting) {
-          setError("Please connect your wallet and set up contracts first");
-          setLoading(false);
-          return;
-        }
-
         setDebug((prev) => ({ ...prev, stage: "Fetching election" }));
 
         // Fetch election details
-        const electionData = await getElection(
-          contracts.tokenVoting,
-          electionId,
-        );
+        const electionData = await getElection(electionId);
         setDebug((prev) => ({ ...prev, electionData }));
 
         if (!electionData) {
@@ -47,6 +44,7 @@ function Nominate() {
         }
 
         setElection(electionData);
+        await loadCandidates();
 
         // Check if election is in nomination phase
         const now = new Date();
@@ -55,16 +53,6 @@ function Nominate() {
         if (now > nominationEnd) {
           setError("Nomination period has ended for this election");
         }
-
-        setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
-
-        // Fetch existing candidates
-        const candidateData = await getCandidates(
-          contracts.tokenVoting,
-          electionId,
-        );
-        setDebug((prev) => ({ ...prev, candidateData }));
-        setCandidates(candidateData);
       } catch (err) {
         console.error("Nominate page error:", err);
         setError("Failed to load election details: " + err.message);
@@ -75,7 +63,7 @@ function Nominate() {
     }
 
     fetchData();
-  }, [electionId, contracts, account]);
+  }, [electionId, account, getElection, loadCandidates]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -88,22 +76,8 @@ function Nominate() {
     setError("");
 
     try {
-      if (!contracts || !contracts.tokenVoting) {
-        throw new Error("Contracts not initialized");
-      }
-
-      // Generate a candidate ID (could be a simple number or derived from form data)
-      const candidateId = Math.floor(Math.random() * 100) + 1; // Random ID between 1-100
-
-      // Call the nominate function with electionId and candidateId
-      await nominateCandidate(contracts.tokenVoting, electionId, candidateId);
-
-      // Refresh candidates list
-      const updatedCandidates = await getCandidates(
-        contracts.tokenVoting,
-        electionId,
-      );
-      setCandidates(updatedCandidates);
+      await nominateCandidate(electionId, formData.name, formData.platform);
+      await loadCandidates(); // Reload candidates after successful nomination
 
       // Reset form
       setFormData({
@@ -156,7 +130,6 @@ function Nominate() {
   const isNominationActive = now <= nominationEnd;
 
   return (
-    // Rest of the component remains the same...
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <Link to="/elections" className="text-blue-500 hover:underline">
