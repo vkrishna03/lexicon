@@ -185,15 +185,19 @@ class ContractManager {
 
   async castVote(electionId, candidateId) {
     try {
+      const signerAddress = await this.currentWallet.address;
+
+      if (!signerAddress) {
+        throw new Error("Could not determine current wallet address");
+      }
+
       // First approve token spending
-      const votingPower = await this.votingSystem.getVotingPower(
-        await this.currentWallet.getAddress(),
-      );
+      const votingPower = await this.votingSystem.getVotingPower(signerAddress);
 
       console.log("Approving tokens for voting:", votingPower.toString());
 
       const approveTx = await this.votingToken.approve(
-        this.votingSystem.address,
+        this.votingSystem.target,
         votingPower,
       );
       await approveTx.wait();
@@ -352,8 +356,24 @@ class ContractManager {
 
   async updateElectionState(electionId) {
     try {
+      if (!this.currentWallet) {
+        console.log(
+          "No wallet connected, using view-only mode for election state",
+        );
+        // Instead of updating, just get the current state
+        const timeStatus =
+          await this.votingSystem.getElectionTimeStatus(electionId);
+        return timeStatus;
+      }
+
+      // Make sure the contract is connected to the signer
+      const connectedContract = this.votingSystem.connect(this.currentWallet);
+
       // Call the contract's updateElectionState function
-      const tx = await this.votingSystem.updateElectionState(electionId);
+      console.log(`Attempting to update election ${electionId} state...`);
+
+      // Call the contract's updateElectionState function
+      const tx = await connectedContract.updateElectionState(electionId);
       await tx.wait();
       console.log(`Updated election ${electionId} state`);
     } catch (error) {

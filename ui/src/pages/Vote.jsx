@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useVoting } from "../contexts/useVoting";
-import TransactionStatus from "../components/TransactionStatus";
 import { contractManager } from "../utils/contractUtils";
 
 function Vote() {
@@ -15,19 +14,21 @@ function Vote() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [isVotingActive, setIsVotingActive] = useState(false);
+  const [electionPhase, setElectionPhase] = useState("");
   const [debug, setDebug] = useState({});
 
   useEffect(() => {
     async function fetchData() {
       try {
-        setDebug((prev) => ({ ...prev, stage: "Fetching election" }));
+        setDebug((prev) => ({ ...prev, stage: "Fetching election data" }));
 
-        // Fetch election details
+        // First update the election state on the blockchain
+        await contractManager.updateElectionState(electionId);
+
+        // Then fetch the election details
         const electionData = await getElection(electionId);
         setDebug((prev) => ({ ...prev, electionData }));
-
-        // Log the timeStatus
-        console.log("Election data timeStatus:", electionData.timeStatus);
 
         if (!electionData) {
           setError(`Election with ID ${electionId} not found`);
@@ -40,62 +41,71 @@ function Vote() {
           id: electionData.id,
           title: electionData.name,
           description: electionData.description,
-          votingStartDate: electionData.votingStart,
-          nominationEndDate: electionData.nominationEnd,
-          endDate: electionData.votingEnd,
+          nominationStart: electionData.nominationStart,
+          nominationEnd: electionData.nominationEnd,
+          votingStart: electionData.votingStart,
+          votingEnd: electionData.votingEnd,
           state: electionData.state,
+          timeStatus: electionData.timeStatus,
         };
 
         setElection(formattedElection);
 
-        setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
+        // Get the current time and determine the election phase
+        const now = new Date();
+        const votingStartTime = new Date(electionData.votingStart);
+        const votingEndTime = new Date(electionData.votingEnd);
+
+        // Determine if voting is active based on current time
+        const votingTimeActive = now >= votingStartTime && now <= votingEndTime;
+
+        // Get the phase from the timeStatus
+        const phase = electionData.timeStatus.phase;
+        setElectionPhase(phase);
+
+        // Set voting active if both time and phase align
+        setIsVotingActive(
+          phase.includes("Voting period active") && votingTimeActive,
+        );
+
+        // Log for debugging
+        console.log("Current time:", now);
+        console.log("Voting start:", votingStartTime);
+        console.log("Voting end:", votingEndTime);
+        console.log("Voting time active:", votingTimeActive);
+        console.log("Election phase:", phase);
+        console.log("Is voting active:", isVotingActive);
+
+        // Set an appropriate error message based on phase
+        if (!phase.includes("Voting period active")) {
+          if (phase.includes("Nomination")) {
+            setError(
+              "Voting has not started yet. The election is still in the nomination phase.",
+            );
+          } else if (phase.includes("ended")) {
+            setError("Voting has ended for this election.");
+          } else if (phase.includes("Waiting for voting")) {
+            setError("Voting will start soon. Please check back later.");
+          } else {
+            setError(phase); // Show the actual phase message
+          }
+        }
 
         // Fetch candidates
+        setDebug((prev) => ({ ...prev, stage: "Fetching candidates" }));
         const candidateData = await getCandidates(electionId);
         setCandidates(candidateData);
 
-        // Check if user has already voted for this election
+        // Check if user has already voted
         if (account) {
           const hasVoted = await contractManager.hasUserVoted(
             electionId,
             account,
           );
           setAlreadyVoted(hasVoted);
-        }
 
-        // Check if election is in voting phase using the state information
-        const isVotingActive =
-          electionData.timeStatus &&
-          electionData.timeStatus.phase &&
-          electionData.timeStatus.phase.includes("Voting period active");
-
-        if (!isVotingActive) {
-          if (electionData.timeStatus.phase.includes("Nomination")) {
-            setError(
-              "Voting has not started yet for this election. It's still in the nomination phase.",
-            );
-          } else if (electionData.timeStatus.phase.includes("ended")) {
-            setError("Voting has ended for this election");
-          } else {
-            setError(electionData.timeStatus.phase);
-          }
-
-          if (electionData.timeStatus) {
-            const phase = electionData.timeStatus.phase;
-
-            if (!phase.includes("Voting period active")) {
-              if (phase.includes("Nomination")) {
-                setError(
-                  "Voting has not started yet. It's still in the nomination phase.",
-                );
-              } else if (phase.includes("ended")) {
-                setError("Voting has ended for this election");
-              } else if (phase.includes("Waiting for voting")) {
-                setError("Voting will start soon. Please check back later.");
-              } else {
-                setError(phase); // Show the actual phase message
-              }
-            }
+          if (hasVoted) {
+            console.log("User has already voted");
           }
         }
       } catch (err) {
@@ -121,7 +131,7 @@ function Vote() {
     setSuccess("");
 
     try {
-      // Extract the candidate ID from the selected candidate
+      // Find the candidate's ID from the selected address
       const candidateId = candidates.find(
         (c) => c.address === selectedCandidate,
       )?.id;
@@ -130,13 +140,15 @@ function Vote() {
         throw new Error("Invalid candidate selection");
       }
 
-      // Cast vote by candidate ID
+      console.log("Casting vote for candidate ID:", candidateId);
+
+      // Cast the vote
       await castVote(electionId, candidateId);
       setSuccess("Your vote has been recorded successfully!");
       setAlreadyVoted(true);
     } catch (err) {
       setError("Failed to cast vote: " + err.message);
-      console.error(err);
+      console.error("Voting error:", err);
     } finally {
       setSubmitting(false);
     }
@@ -175,13 +187,28 @@ function Vote() {
     );
   }
 
-  const now = new Date();
-  const nominationEnd = new Date(election.nominationEndDate);
-  const electionEnd = new Date(election.endDate);
-  const isVotingActive =
-    election.timeStatus &&
-    election.timeStatus.phase &&
-    election.timeStatus.phase.includes("Voting period active");
+  // Determine if we should show voting UI, already voted message, or voting unavailable
+  const showVotingUI = isVotingActive && !alreadyVoted;
+  const showAlreadyVotedMessage = isVotingActive && alreadyVoted;
+  const showVotingUnavailable = !isVotingActive;
+
+  // Helper function to determine the correct message for voting unavailable
+  const getVotingUnavailableMessage = () => {
+    const now = new Date();
+    const nominationEnd = new Date(election.nominationEnd);
+    const votingStart = new Date(election.votingStart);
+    const votingEnd = new Date(election.votingEnd);
+
+    if (now < nominationEnd) {
+      return "Voting has not started yet. The election is still in the nomination phase.";
+    } else if (now < votingStart) {
+      return "Nomination period has ended. Voting will begin soon.";
+    } else if (now > votingEnd) {
+      return "The voting period for this election has ended.";
+    } else {
+      return "Voting is currently unavailable.";
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -197,14 +224,23 @@ function Vote() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
+            <span className="font-medium">Nomination Period:</span>{" "}
+            {new Date(election.nominationStart).toLocaleString()} -{" "}
+            {new Date(election.nominationEnd).toLocaleString()}
+          </div>
+          <div>
             <span className="font-medium">Voting Period:</span>{" "}
-            {new Date(election.nominationEndDate).toLocaleString()} -{" "}
-            {new Date(election.endDate).toLocaleString()}
+            {new Date(election.votingStart).toLocaleString()} -{" "}
+            {new Date(election.votingEnd).toLocaleString()}
           </div>
         </div>
 
         <div
-          className={`text-sm font-bold px-3 py-1 rounded inline-block ${isVotingActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}
+          className={`text-sm font-bold px-3 py-1 rounded inline-block ${
+            isVotingActive
+              ? "bg-green-100 text-green-800"
+              : "bg-red-100 text-red-800"
+          }`}
         >
           {isVotingActive ? "Voting Active" : "Voting Inactive"}
         </div>
@@ -231,7 +267,7 @@ function Vote() {
         </div>
       )}
 
-      {isVotingActive && !alreadyVoted && (
+      {showVotingUI && (
         <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
           <h2 className="text-xl font-bold mb-4">Cast Your Vote</h2>
 
@@ -280,7 +316,7 @@ function Vote() {
         </div>
       )}
 
-      {isVotingActive && alreadyVoted && (
+      {showAlreadyVotedMessage && (
         <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
           <h2 className="text-xl font-bold mb-4">You Have Voted</h2>
           <p className="text-gray-600">
@@ -290,14 +326,10 @@ function Vote() {
         </div>
       )}
 
-      {!isVotingActive && (
+      {showVotingUnavailable && (
         <div className="bg-white shadow-lg rounded-lg p-6 mb-8">
           <h2 className="text-xl font-bold mb-4">Voting Unavailable</h2>
-          <p className="text-gray-600">
-            {now < nominationEnd
-              ? "Voting has not started yet. The election is still in the nomination phase."
-              : "The voting period for this election has ended."}
-          </p>
+          <p className="text-gray-600">{getVotingUnavailableMessage()}</p>
           <div className="mt-4">
             <Link
               to={`/results/${electionId}`}
@@ -308,6 +340,19 @@ function Vote() {
           </div>
         </div>
       )}
+
+      <div className="bg-gray-100 rounded-lg p-4 mb-8 text-xs">
+        <h3 className="font-bold mb-2">Debug Information</h3>
+        <p>
+          <strong>Current Phase:</strong> {electionPhase}
+        </p>
+        <p>
+          <strong>Voting Active:</strong> {isVotingActive ? "Yes" : "No"}
+        </p>
+        <p>
+          <strong>Already Voted:</strong> {alreadyVoted ? "Yes" : "No"}
+        </p>
+      </div>
     </div>
   );
 }
