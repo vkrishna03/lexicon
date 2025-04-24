@@ -12,16 +12,19 @@ import Vote from "./pages/Vote";
 import SetupContracts from "./pages/SetupContracts";
 import TokenAllocation from "./pages/TokenAllocationPage";
 import ContractTest from "./pages/ContractTest";
+import { VotingProvider } from "./contexts/VotingContext";
 
 function App() {
   return (
-    <Web3Provider>
-      <Router>
-        <div className="min-h-screen bg-gray-100">
-          <AppContent />
-        </div>
-      </Router>
-    </Web3Provider>
+    <Router>
+      <VotingProvider>
+        <Web3Provider>
+          <div className="min-h-screen bg-gray-100">
+            <AppContent />
+          </div>
+        </Web3Provider>
+      </VotingProvider>
+    </Router>
   );
 }
 

@@ -5,9 +5,7 @@ import VotingTokenABI from "../../../blockchain/artifacts/contracts/VotingToken.
 
 class ContractManager {
   constructor() {
-    this.provider = new ethers.providers.JsonRpcProvider(
-      "http://localhost:8545",
-    );
+    this.provider = new ethers.JsonRpcProvider("http://localhost:8545");
     this.loadContracts();
     this.currentWallet = null;
   }
